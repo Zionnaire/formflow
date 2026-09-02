@@ -1,0 +1,101 @@
+import type { Config } from 'tailwindcss';
+
+/**
+ * FormFlow design tokens — ported 1:1 from DESIGN.md ("Warm & Approachable Assistant").
+ * DESIGN.md is the source of truth for this theme; do not hand-edit values here without
+ * updating that file too.
+ */
+const config: Config = {
+  darkMode: 'class',
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        'on-tertiary-fixed-variant': '#5c4300',
+        'on-surface-variant': '#56423e',
+        'on-secondary-container': '#6b1f00',
+        'surface-variant': '#e5e2de',
+        'surface-container': '#f0ede9',
+        'secondary-container': '#fe7e4f',
+        error: '#ba1a1a',
+        'primary-fixed': '#ffdad3',
+        'inverse-surface': '#31302e',
+        'on-secondary-fixed-variant': '#822800',
+        'surface-tint': '#9f402d',
+        'error-container': '#ffdad6',
+        'inverse-primary': '#ffb4a5',
+        'surface-container-low': '#f6f3ef',
+        'on-primary-fixed-variant': '#802918',
+        'surface-dim': '#dcdad6',
+        'on-tertiary': '#ffffff',
+        'on-tertiary-fixed': '#261a00',
+        'primary-fixed-dim': '#ffb4a5',
+        background: '#fcf9f5',
+        'on-primary-container': '#5a0d02',
+        'on-secondary': '#ffffff',
+        primary: '#9f402d',
+        surface: '#fcf9f5',
+        tertiary: '#795900',
+        'secondary-fixed-dim': '#ffb59c',
+        'surface-container-high': '#eae8e4',
+        'on-surface': '#1c1c1a',
+        'inverse-on-surface': '#f3f0ec',
+        'on-error-container': '#93000a',
+        'secondary-fixed': '#ffdbcf',
+        'primary-container': '#e2725b',
+        outline: '#89726d',
+        'tertiary-container': '#bb8b00',
+        'surface-bright': '#fcf9f5',
+        'on-tertiary-container': '#3a2900',
+        'tertiary-fixed-dim': '#fbbc00',
+        'outline-variant': '#ddc0ba',
+        'tertiary-fixed': '#ffdfa0',
+        'on-error': '#ffffff',
+        'on-secondary-fixed': '#380c00',
+        'surface-container-highest': '#e5e2de',
+        'on-primary': '#ffffff',
+        'on-background': '#1c1c1a',
+        secondary: '#a43c12',
+        'surface-container-lowest': '#ffffff',
+        'on-primary-fixed': '#3e0500',
+      },
+      borderRadius: {
+        sm: '0.25rem',
+        DEFAULT: '0.5rem',
+        md: '0.75rem',
+        lg: '1rem',
+        xl: '1.5rem',
+        full: '9999px',
+      },
+      spacing: {
+        base: '8px',
+        xs: '4px',
+        sm: '12px',
+        md: '24px',
+        lg: '48px',
+        xl: '80px',
+        gutter: '24px',
+        margin: '32px',
+      },
+      fontFamily: {
+        sans: ['var(--font-plus-jakarta-sans)', 'system-ui', 'sans-serif'],
+      },
+      fontSize: {
+        'headline-lg': ['40px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700' }],
+        'headline-lg-mobile': ['32px', { lineHeight: '1.2', fontWeight: '700' }],
+        'headline-md': ['24px', { lineHeight: '1.3', fontWeight: '600' }],
+        'body-lg': ['18px', { lineHeight: '1.6', fontWeight: '400' }],
+        'body-md': ['16px', { lineHeight: '1.6', fontWeight: '400' }],
+        'label-md': ['14px', { lineHeight: '1.4', letterSpacing: '0.01em', fontWeight: '600' }],
+        'label-sm': ['12px', { lineHeight: '1.4', fontWeight: '500' }],
+      },
+      boxShadow: {
+        card: '0px 4px 20px rgba(67, 52, 48, 0.05)',
+        floating: '0px 12px 40px rgba(67, 52, 48, 0.1)',
+      },
+    },
+  },
+  plugins: [],
+};
+
+export default config;
