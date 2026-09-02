@@ -1,4 +1,4 @@
-import type { FormTemplateSummary, MyForm, Testimonial, StudentProfile, GuardianProfile, MediaAssets } from './types';
+import type { FormTemplateSummary, MyForm, Testimonial } from './types';
 
 /**
  * Static placeholder data standing in for the API described in
@@ -130,33 +130,6 @@ export const myForms: MyForm[] = [
     dateLabel: 'Last edited: Oct 15',
   },
 ];
-
-export const studentProfile: StudentProfile = {
-  fullName: 'Alex Rivera',
-  matricNumber: 'S-12345678',
-  department: 'Computer Science',
-  level: '300 Level (Junior)',
-  phone: '+1 (555) 019-2834',
-  email: 'a.rivera@university.edu',
-  dateOfBirth: '',
-};
-
-export const guardianProfile: GuardianProfile = {
-  fullName: '',
-  relationship: '',
-  phone: '',
-  email: '',
-};
-
-export const mediaAssets: MediaAssets = {
-  passportPhotoUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuA1P44kFV4Z4c9laBtv-AcI1y4-LdhS7yi8FTP9kSjjTM8NF5buq60-Z7yMPhMiKjNgMJiwhz8w3jxLLw-lm1T2PFY1hZ22W2m9gTs1RiTJZ7LlXTdtehNtACAJ4r4cuZqPSjwX0hv7Ec7fExqj5Soxla8lnB2EVaUyZPOiR3RiTWcsYMT197NzVUXh5sOIo2Qk-XOxgDLcgDVS4auyJ3scvV1bFWSt2O5o8yc2VHVTHcIBGQi-XJuWYA',
-  signatureUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCmtL8aedePUfOW0LfS8KBORVl47o3I1LTBjO7CoHkj49KyyiqutVW0cglUgvmrASq13rKcnTh7YXFpzt7yJyOt_CLRGrQPbROORrz1rF_gwEST_PMlo2IrsrcEsp3tkGRLGPsdx4sxhJI_rwv__sUuPOw2laa23wAQISiAm14fyuLuw6UcB-JklwunADv4PRXMFJZvJenMYaSMYZZJrUyMNP0yL7DJSCw7OxwAQyzQPqL73Z0JdhdvNQ',
-};
-
-export const studentAvatarUrl =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDLxpR8VjH_IOCdpiwMyS-eb_eZC6G2SFHqU9dD9jpvJ5bMC8bmroGIlWZoJ1JQ5G1DjpPqUp6f8uFMO1E8foMD-RzujEFNgKAdnnwXP_qIqofL8-81vTlMQo1PVXML6fjhoVmD2z9bUZdcNesohu694X7NfHNApmgRjhlXDpoq-bviED3mB_MvDKpMqRP3sqefKWB8NSciAgZiHKa4TBSM0xU9wUjyOHOO_FaiL0V2VCw9-ceQs0lbrg';
 
 export function getTemplateById(id: string): FormTemplateSummary | undefined {
   return formTemplates.find((t) => t.id === id);

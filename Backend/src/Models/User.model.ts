@@ -8,7 +8,6 @@ export interface PrimaryProfile {
   phone?: string;
   email?: string;
   dateOfBirth?: Date;
-  profilePhotoUrl?: string;
 }
 
 export interface SecondaryProfile {
@@ -44,7 +43,6 @@ const PrimaryProfileSchema = new mongoose.Schema<PrimaryProfile>(
     phone: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
     dateOfBirth: { type: Date },
-    profilePhotoUrl: { type: String },
   },
   { _id: false },
 );

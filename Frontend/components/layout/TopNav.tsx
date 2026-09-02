@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
-import { studentAvatarUrl } from '@/lib/mock-data';
+import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
 const NAV_LINKS = [
@@ -16,6 +15,13 @@ const NAV_LINKS = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    router.push('/');
+  }
 
   return (
     <header className="sticky top-0 z-50 shadow-sm bg-background w-full">
@@ -52,12 +58,36 @@ export function TopNav() {
           >
             <Icon name="menu" />
           </button>
-          <Link
-            href="/profile"
-            className="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant hover:shadow-md transition-all block"
-          >
-            <Image src={studentAvatarUrl} alt="Student profile picture" width={40} height={40} className="w-full h-full object-cover" />
-          </Link>
+          {loading ? (
+            <div className="w-10 h-10 rounded-full bg-surface-container-high animate-pulse" />
+          ) : user ? (
+            <>
+              <button
+                onClick={handleLogout}
+                className="hidden md:inline-flex font-label-md text-label-md text-on-surface-variant hover:text-primary px-sm py-xs rounded-lg hover:bg-surface-container-low transition-colors"
+              >
+                Log out
+              </button>
+              <Link
+                href="/profile"
+                className="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant hover:shadow-md transition-all flex items-center justify-center"
+              >
+                {user.mediaAssets.passportPhotoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded, unpredictable source
+                  <img src={user.mediaAssets.passportPhotoUrl} alt="Profile picture" className="w-full h-full object-cover" />
+                ) : (
+                  <Icon name="person" className="text-on-surface-variant" />
+                )}
+              </Link>
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded-full hover:bg-surface-tint transition-colors"
+            >
+              Log In
+            </Link>
+          )}
         </div>
       </div>
     </header>

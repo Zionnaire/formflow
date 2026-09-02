@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Dancing_Script } from 'next/font/google';
+import { Providers } from './providers';
 import './globals.css';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

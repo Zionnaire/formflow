@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { registerUser, loginUser, refreshAuthTokens, getUserById } from '../Services/auth.service.js';
+import { registerUser, loginUser, refreshAuthTokens, getUserById, updateProfile } from '../Services/auth.service.js';
 import { createApiSuccess, createApiError } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 import { API_ERROR_CODES } from '../Types/index.js';
@@ -58,5 +58,10 @@ export const getMeHandler = asyncHandler(async (req: Request, res: Response) => 
     res.status(404).json(createApiError(API_ERROR_CODES.NOT_FOUND, 'User not found'));
     return;
   }
+  res.json(createApiSuccess({ user }));
+});
+
+export const updateProfileHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await updateProfile(req.user!.sub, req.body);
   res.json(createApiSuccess({ user }));
 });

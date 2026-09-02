@@ -1,23 +1,16 @@
 import bcrypt from 'bcryptjs';
-import { UserModel, type IUser } from '../Models/User.model.js';
+import { UserModel, type IUser, type PrimaryProfile, type SecondaryProfile } from '../Models/User.model.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../Middlewares/jwt.js';
 import { ApiError } from '../Utils/errors.js';
 import { logger } from '../Middlewares/logger.js';
 
 const BCRYPT_ROUNDS = 12;
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  fullName?: string;
-  createdAt: string;
-}
-
 export async function registerUser(
   email: string,
   password: string,
   fullName?: string,
-): Promise<{ accessToken: string; refreshToken: string; user: AuthUser }> {
+): Promise<{ accessToken: string; refreshToken: string; user: IUser }> {
   const existing = await UserModel.findOne({ email: email.toLowerCase() });
   if (existing) throw new ApiError(409, 'Email already in use', 'CONFLICT');
 
@@ -35,13 +28,13 @@ export async function registerUser(
     signRefreshToken(user._id.toString()),
   ]);
 
-  return { accessToken, refreshToken, user: toAuthUser(user) };
+  return { accessToken, refreshToken, user };
 }
 
 export async function loginUser(
   email: string,
   password: string,
-): Promise<{ accessToken: string; refreshToken: string; user: AuthUser }> {
+): Promise<{ accessToken: string; refreshToken: string; user: IUser }> {
   const user = await UserModel.findOne({ email: email.toLowerCase() }).select('+passwordHash');
   if (!user) throw new ApiError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
 
@@ -54,7 +47,7 @@ export async function loginUser(
   ]);
 
   logger.info({ userId: user._id.toString() }, 'User login');
-  return { accessToken, refreshToken, user: toAuthUser(user) };
+  return { accessToken, refreshToken, user };
 }
 
 export async function refreshAuthTokens(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -74,11 +67,21 @@ export async function getUserById(id: string): Promise<IUser | null> {
   return UserModel.findById(id);
 }
 
-function toAuthUser(user: IUser): AuthUser {
-  return {
-    id: user._id.toString(),
-    email: user.email,
-    ...(user.primaryProfile?.fullName ? { fullName: user.primaryProfile.fullName } : {}),
-    createdAt: user.createdAt.toISOString(),
-  };
+export async function updateProfile(
+  userId: string,
+  patch: { primaryProfile?: Partial<PrimaryProfile>; secondaryProfiles?: SecondaryProfile[] },
+): Promise<IUser> {
+  const user = await UserModel.findById(userId);
+  if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
+
+  if (patch.primaryProfile) {
+    Object.assign(user.primaryProfile, patch.primaryProfile);
+  }
+  if (patch.secondaryProfiles) {
+    user.secondaryProfiles = patch.secondaryProfiles as IUser['secondaryProfiles'];
+  }
+
+  await user.save();
+  logger.info({ userId }, 'Profile updated');
+  return user;
 }
