@@ -4,7 +4,7 @@ import { use, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { EditorSideNav } from '@/components/editor/EditorSideNav';
-import { SignatureBox } from '@/components/editor/SignatureBox';
+import { SignatureBox } from '@/components/ui/SignatureBox';
 import { studentProfile, resolveFormTitle } from '@/lib/mock-data';
 
 interface FormValues {
@@ -24,12 +24,13 @@ export default function FormEditorPage({ params }: { params: Promise<{ formId: s
 
   const [values, setValues] = useState<FormValues>(EMPTY_VALUES);
   const [autoFilled, setAutoFilled] = useState(false);
-  const [signed, setSigned] = useState(false);
+  const [signature, setSignature] = useState('');
   const [saved, setSaved] = useState(false);
 
   const filledRequired = REQUIRED_FIELDS.filter((key) => values[key].trim().length > 0).length;
   const totalFields = REQUIRED_FIELDS.length + 1; // + signature
-  const progress = Math.round(((filledRequired + (signed ? 1 : 0)) / totalFields) * 100);
+  const progress = Math.round(((filledRequired + (signature.trim() ? 1 : 0)) / totalFields) * 100);
+  const fullName = `${values.firstName} ${values.lastName}`.trim();
 
   function updateField(key: keyof FormValues, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -45,6 +46,7 @@ export default function FormEditorPage({ params }: { params: Promise<{ formId: s
       email: studentProfile.email,
       phone: studentProfile.phone,
     });
+    setSignature(studentProfile.fullName);
     setAutoFilled(true);
     setSaved(false);
   }
@@ -120,7 +122,13 @@ export default function FormEditorPage({ params }: { params: Promise<{ formId: s
               />
             </div>
 
-            <SignatureBox signed={signed} onSign={() => setSigned((s) => !s)} />
+            <SignatureBox
+              id="applicantSignature"
+              label="Applicant Signature"
+              value={signature}
+              onChange={setSignature}
+              suggestedName={fullName}
+            />
           </form>
         </div>
       </div>

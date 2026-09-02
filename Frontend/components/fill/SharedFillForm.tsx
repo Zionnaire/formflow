@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/utils';
+import { SignatureBox } from '@/components/ui/SignatureBox';
 
 interface GuarantorValues {
   firstName: string;
@@ -29,8 +29,9 @@ const EMPTY_VALUES: GuarantorValues = {
 
 export function SharedFillForm({ studentName }: { studentName: string }) {
   const [values, setValues] = useState(EMPTY_VALUES);
-  const [signed, setSigned] = useState(false);
+  const [signature, setSignature] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const fullName = `${values.firstName} ${values.lastName}`.trim();
 
   function update<K extends keyof GuarantorValues>(key: K, value: GuarantorValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -170,27 +171,11 @@ export function SharedFillForm({ studentName }: { studentName: string }) {
             By signing below, you agree to act as a guarantor for {studentName} for the duration of the lease
             agreement.
           </p>
-          <button
-            type="button"
-            onClick={() => setSigned((s) => !s)}
-            className={cn(
-              'border-2 border-dashed rounded-lg h-32 flex items-center justify-center transition-colors group',
-              signed ? 'border-primary bg-primary-fixed/30' : 'border-primary-container bg-surface-container hover:bg-surface-container-high',
-            )}
-          >
-            {signed ? (
-              <span className="font-body-lg text-body-lg text-primary italic">Signed</span>
-            ) : (
-              <div className="flex flex-col items-center gap-xs text-primary group-hover:text-primary-container transition-colors">
-                <Icon name="edit" className="text-3xl" />
-                <span className="font-label-md text-label-md">Click to Sign</span>
-              </div>
-            )}
-          </button>
+          <SignatureBox id="guarantorSignature" label="Your Signature" value={signature} onChange={setSignature} suggestedName={fullName} />
         </section>
 
         <div className="flex justify-end mt-sm pt-md border-t border-surface-variant">
-          <Button type="submit" variant="primary" className="rounded-full shadow-card" disabled={!signed}>
+          <Button type="submit" variant="primary" className="rounded-full shadow-card" disabled={!signature.trim()}>
             <Icon name="send" />
             Submit My Section
           </Button>

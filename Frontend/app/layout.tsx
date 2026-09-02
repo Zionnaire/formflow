@@ -1,11 +1,19 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { Plus_Jakarta_Sans, Dancing_Script } from 'next/font/google';
 import './globals.css';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-plus-jakarta-sans',
+  display: 'swap',
+});
+
+// Renders typed e-signatures in a handwritten script — see components/ui/SignatureBox.tsx.
+const dancingScript = Dancing_Script({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-signature',
   display: 'swap',
 });
 
@@ -16,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={plusJakartaSans.variable}>
+    <html lang="en" className={`${plusJakartaSans.variable} ${dancingScript.variable}`}>
       <head>
         {/*
           Material Symbols is a variable icon font (FILL/wght/GRAD/opsz axes) that
