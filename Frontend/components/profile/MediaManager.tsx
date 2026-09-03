@@ -24,7 +24,7 @@ export function MediaManager() {
           title="Passport Photo"
           description="Used for ID cards and official forms."
           icon="account_box"
-          previewUrl={user?.mediaAssets.passportPhotoUrl}
+          previewUrl={user?.mediaAssets?.passportPhotoUrl}
           previewClassName="relative w-48 h-64 bg-surface-container-low rounded-lg border-2 border-dashed border-outline-variant overflow-hidden"
           emptyLabel="No photo yet"
           replaceLabel="Replace Photo"
@@ -35,7 +35,7 @@ export function MediaManager() {
           title="Digital Signature"
           description="Auto-sign documents securely."
           icon="draw"
-          previewUrl={user?.mediaAssets.signatureUrl}
+          previewUrl={user?.mediaAssets?.signatureUrl}
           previewClassName="relative w-full h-48 bg-surface-container-low rounded-lg border-2 border-dashed border-primary overflow-hidden"
           emptyLabel="No signature yet"
           replaceLabel="Update Signature"

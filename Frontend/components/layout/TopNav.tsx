@@ -72,7 +72,7 @@ export function TopNav() {
                 href="/profile"
                 className="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant hover:shadow-md transition-all flex items-center justify-center"
               >
-                {user.mediaAssets.passportPhotoUrl ? (
+                {user.mediaAssets?.passportPhotoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- user-uploaded, unpredictable source
                   <img src={user.mediaAssets.passportPhotoUrl} alt="Profile picture" className="w-full h-full object-cover" />
                 ) : (

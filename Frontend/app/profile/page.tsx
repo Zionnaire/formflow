@@ -53,17 +53,18 @@ function ProfileForm() {
     if (!user) return;
     // Seeds the editable form from the loaded profile once, then leaves local edits alone —
     // this is a one-time sync from an async external value, not a re-render loop.
+    const primary = user.primaryProfile ?? {};
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfile({
-      fullName: user.primaryProfile.fullName ?? '',
-      matricNumber: user.primaryProfile.matricNumber ?? '',
-      department: user.primaryProfile.department ?? '',
-      level: user.primaryProfile.level ?? '',
-      phone: user.primaryProfile.phone ?? '',
-      email: user.primaryProfile.email ?? '',
-      dateOfBirth: user.primaryProfile.dateOfBirth ? user.primaryProfile.dateOfBirth.slice(0, 10) : '',
+      fullName: primary.fullName ?? '',
+      matricNumber: primary.matricNumber ?? '',
+      department: primary.department ?? '',
+      level: primary.level ?? '',
+      phone: primary.phone ?? '',
+      email: primary.email ?? '',
+      dateOfBirth: primary.dateOfBirth ? primary.dateOfBirth.slice(0, 10) : '',
     });
-    const existingGuardian = user.secondaryProfiles.find((p) => p.label === 'Guardian');
+    const existingGuardian = (user.secondaryProfiles ?? []).find((p) => p.label === 'Guardian');
     if (existingGuardian) {
       setGuardian({
         fullName: existingGuardian.fullName,
@@ -131,7 +132,7 @@ function ProfileForm() {
             Student Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-            <PhotoUploadField photoUrl={user?.mediaAssets.passportPhotoUrl} onUploaded={refreshUser} />
+            <PhotoUploadField photoUrl={user?.mediaAssets?.passportPhotoUrl} onUploaded={refreshUser} />
             <Input
               id="fullName"
               label="Full Name"

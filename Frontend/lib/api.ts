@@ -26,9 +26,10 @@ export interface ApiSecondaryProfile {
 export interface ApiUser {
   _id: string;
   email: string;
-  primaryProfile: ApiUserProfile;
-  secondaryProfiles: ApiSecondaryProfile[];
-  mediaAssets: {
+  /** Optional in the type (not just at runtime) so every access site is forced to guard it — the API contract guarantees an object here, but nothing stops that from drifting. */
+  primaryProfile?: ApiUserProfile;
+  secondaryProfiles?: ApiSecondaryProfile[];
+  mediaAssets?: {
     signatureUrl?: string;
     passportPhotoUrl?: string;
   };
