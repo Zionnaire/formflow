@@ -177,21 +177,109 @@ async function callTool<T>(
   }
 }
 
+/**
+ * Above this many text items in one call, the prompt + a full field-schema response for that
+ * many fields risks blowing past Groq's 8,000-token-per-request ceiling (confirmed against a
+ * real 13-page, 174-item form: one shot truncated mid-JSON). Batching by page range keeps each
+ * call's input small regardless of document length, at the cost of one call per batch.
+ */
+const MAX_ITEMS_PER_BATCH = 40;
+
+interface PageBatch {
+  pageRange: [number, number];
+  items: PositionedText[];
+}
+
+function batchByPageRange(items: PositionedText[], pageCount: number): PageBatch[] {
+  const batches: PageBatch[] = [];
+  let current: PositionedText[] = [];
+  let batchStartPage = 1;
+
+  for (let page = 1; page <= pageCount; page++) {
+    const pageItems = items.filter((i) => i.page === page);
+    if (current.length > 0 && current.length + pageItems.length > MAX_ITEMS_PER_BATCH) {
+      batches.push({ pageRange: [batchStartPage, page - 1], items: current });
+      current = [];
+      batchStartPage = page;
+    }
+    current.push(...pageItems);
+  }
+  if (current.length > 0 || batches.length === 0) {
+    batches.push({ pageRange: [batchStartPage, pageCount], items: current });
+  }
+  return batches;
+}
+
+/** Batch-local sectionId -> canonical sectionId, merging same-role sections across batches and widening their pageRange. */
+function mergeIntoCanonicalSections(canonicalByRole: Map<PartyRole, FormSection>, batchSections: FormSection[]): Map<string, string> {
+  const localToCanonical = new Map<string, string>();
+
+  for (const section of batchSections) {
+    const existing = canonicalByRole.get(section.role);
+    if (existing) {
+      existing.pageRange = [Math.min(existing.pageRange[0], section.pageRange[0]), Math.max(existing.pageRange[1], section.pageRange[1])];
+      localToCanonical.set(section.sectionId, existing.sectionId);
+    } else {
+      canonicalByRole.set(section.role, section);
+      localToCanonical.set(section.sectionId, section.sectionId);
+    }
+  }
+
+  return localToCanonical;
+}
+
+function ensureUniqueId(id: string, seen: Set<string>): string {
+  if (!seen.has(id)) {
+    seen.add(id);
+    return id;
+  }
+  let suffix = 2;
+  while (seen.has(`${id}_${suffix}`)) suffix++;
+  const unique = `${id}_${suffix}`;
+  seen.add(unique);
+  return unique;
+}
+
 export async function extractFieldsFromPdf(items: PositionedText[], pageCount: number, title: string): Promise<ExtractedSchema> {
-  const layout = items.map((i) => ({ page: i.page, text: i.text, x: round(i.x), y: round(i.y) }));
+  const batches = batchByPageRange(items, pageCount);
+  logger.info({ title, pageCount, itemCount: items.length, batchCount: batches.length }, 'Extracting fields from PDF');
 
-  const prompt = `This form is titled "${title}" and has ${pageCount} page(s). Below is every text run extracted from the PDF, with its page number and position as a fraction of page width (x) and height (y), origin top-left.\n\n${JSON.stringify(layout)}\n\nUsing this layout, identify every fillable field a person would need to complete.\n${FIELD_TYPE_GUIDE}\nCall submit_form_fields with the complete result.`;
+  const canonicalByRole = new Map<PartyRole, FormSection>();
+  const fields: FieldDefinition[] = [];
+  const seenFieldIds = new Set<string>();
 
-  const input = await callTool<{ sections?: unknown; fields?: unknown }>('submit_form_fields', [EXTRACT_FIELDS_TOOL], prompt);
+  for (const batch of batches) {
+    const layout = batch.items.map((i) => ({ page: i.page, text: i.text, x: round(i.x), y: round(i.y) }));
+    const isOnlyBatch = batches.length === 1;
 
-  const sections = sanitizeSections(input.sections);
-  const fields = sanitizeFields(input.fields, sections);
+    const prompt = `This form is titled "${title}" and has ${pageCount} page(s) total.${
+      isOnlyBatch ? '' : ` You are looking at pages ${batch.pageRange[0]}-${batch.pageRange[1]} only, out of the full document.`
+    } Below is every text run extracted from ${isOnlyBatch ? 'the PDF' : 'these pages'}, with its page number and position as a fraction of page width (x) and height (y), origin top-left.\n\n${JSON.stringify(layout)}\n\nUsing this layout, identify every fillable field a person would need to complete on ${isOnlyBatch ? 'this form' : 'these pages'}.\n${FIELD_TYPE_GUIDE}\nIf a section (a distinct party's part of the form) appears here, include it in "sections" with the page range you can see for it in this excerpt — even if it continues beyond these pages. Call submit_form_fields with the result.`;
+
+    const input = await callTool<{ sections?: unknown; fields?: unknown }>('submit_form_fields', [EXTRACT_FIELDS_TOOL], prompt, 4000);
+
+    const batchSections = sanitizeSections(input.sections);
+    const localToCanonical = mergeIntoCanonicalSections(canonicalByRole, batchSections);
+    const batchFields = sanitizeFields(input.fields, batchSections);
+
+    for (const field of batchFields) {
+      fields.push({
+        ...field,
+        id: ensureUniqueId(field.id, seenFieldIds),
+        sectionId: localToCanonical.get(field.sectionId) ?? field.sectionId,
+      });
+    }
+  }
+
+  if (canonicalByRole.size === 0) {
+    canonicalByRole.set('owner', { sectionId: 'owner', label: 'Applicant', role: 'owner', pageRange: [1, pageCount] });
+  }
 
   if (fields.length === 0) {
     logger.warn({ title }, 'Groq extracted zero fields from PDF');
   }
 
-  return { sections, fields };
+  return { sections: [...canonicalByRole.values()], fields };
 }
 
 /** Fuzzy-maps a user's profile onto a template's field labels (brief section 8, step 2). */
@@ -222,8 +310,11 @@ function round(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
+/** No fallback here deliberately — an empty batch (e.g. a cover page with nothing to fill) should
+ *  contribute nothing, not a spurious placeholder section. extractFieldsFromPdf applies the
+ *  "ensure at least one section" fallback once, after merging every batch. */
 function sanitizeSections(raw: unknown): FormSection[] {
-  if (!Array.isArray(raw)) return [{ sectionId: 'owner', label: 'Applicant', role: 'owner', pageRange: [1, 1] }];
+  if (!Array.isArray(raw)) return [];
 
   const sections: FormSection[] = [];
   for (const entry of raw) {
@@ -245,7 +336,7 @@ function sanitizeSections(raw: unknown): FormSection[] {
       });
     }
   }
-  return sections.length > 0 ? sections : [{ sectionId: 'owner', label: 'Applicant', role: 'owner', pageRange: [1, 1] }];
+  return sections;
 }
 
 function sanitizeFields(raw: unknown, sections: FormSection[]): FieldDefinition[] {
