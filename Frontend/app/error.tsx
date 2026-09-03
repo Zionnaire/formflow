@@ -7,8 +7,14 @@ import { Logo } from '@/components/ui/Logo';
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console -- no client-side error reporting service wired up yet
-    console.error(error);
+    try {
+      console.error(error);
+    } catch {
+      // Next.js/Turbopack dev mode can hand this boundary an unresolved RSC "chunk" object
+      // instead of a real Error when something goes wrong mid-stream — logging it directly can
+      // itself throw. Fall back to whatever's safely readable so the boundary never crashes twice.
+      console.error('Error boundary caught a non-loggable error object', { name: error?.name, message: error?.message });
+    }
   }, [error]);
 
   return (
