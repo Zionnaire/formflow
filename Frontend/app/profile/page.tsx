@@ -147,17 +147,19 @@ function ProfileForm() {
               value={profile.matricNumber}
               onChange={(e) => setProfile((p) => ({ ...p, matricNumber: e.target.value }))}
             />
-            <Select
+            <Input
               id="department"
+              list="department-options"
               label="Department"
+              placeholder="e.g. Computer Science"
               value={profile.department}
               onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value }))}
-            >
-              <option value="">Select Department...</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Arts & Humanities">Arts &amp; Humanities</option>
-            </Select>
+            />
+            <datalist id="department-options">
+              <option value="Computer Science" />
+              <option value="Engineering" />
+              <option value="Arts & Humanities" />
+            </datalist>
             <Select id="level" label="Level / Year" value={profile.level} onChange={(e) => setProfile((p) => ({ ...p, level: e.target.value }))}>
               <option value="">Select Level...</option>
               <option value="100 Level (Freshman)">100 Level (Freshman)</option>
