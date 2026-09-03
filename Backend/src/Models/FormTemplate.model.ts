@@ -36,6 +36,7 @@ const FieldDefinitionSchema = new mongoose.Schema<FieldDefinition>(
       height: { type: Number, required: true },
     },
     required: { type: Boolean, default: false },
+    helpText: { type: String },
     ruledLineCount: { type: Number },
     gridCriteria: { type: [String] },
     gridOptions: { type: [String] },

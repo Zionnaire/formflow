@@ -52,6 +52,8 @@ export interface FieldDefinition {
   page: number;
   coordinates: FieldCoordinates;
   required: boolean;
+  /** The instructional sentence(s) printed under a section/field heading in the source PDF (e.g. "Provide a brief overview of your internship…") — shown to the user as guidance, distinct from the short field label. */
+  helpText?: string;
   ruledLineCount?: number;
   gridCriteria?: string[];
   gridOptions?: string[];

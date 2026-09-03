@@ -4,10 +4,11 @@ import { cn } from '@/lib/utils';
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
+  helperText?: string;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { className, label, id, ...props },
+  { className, label, helperText, id, ...props },
   ref,
 ) {
   return (
@@ -17,6 +18,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           {label}
         </label>
       )}
+      {helperText && <p className="font-body-sm text-body-sm text-on-surface-variant/80 ml-1 -mt-1">{helperText}</p>}
       <textarea
         ref={ref}
         id={id}

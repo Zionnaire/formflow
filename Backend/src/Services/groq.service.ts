@@ -25,7 +25,10 @@ Field type vocabulary — classify every fillable area as exactly one of:
 - "rating_grid": a table with criteria rows and rating columns (e.g. Excellent/Very Good/Good/Fair/Poor)
   — one field per table, with gridCriteria = the row labels and gridOptions = the column labels.
 - "long_text_ruled": a block of consecutive ruled/blank lines meant for handwritten paragraphs
-  under a heading — set ruledLineCount to roughly how many ruled lines are in the block.
+  under a heading — set ruledLineCount to roughly how many ruled lines are in the block. If there
+  is instructional text printed just under the heading (e.g. "Provide a brief overview of your
+  internship, including the name of the organization…"), capture it verbatim in helpText — do not
+  invent it if none is present.
 - "signature": a signature line or box.
 - "stamp": an official stamp/seal area — not digitally fillable, include it so the UI can flag it,
   but it never gets a value.
@@ -85,6 +88,11 @@ const EXTRACT_FIELDS_TOOL = {
                 required: ['x', 'y', 'width', 'height'],
               },
               required: { type: 'boolean' },
+              helpText: {
+                type: 'string',
+                description:
+                  'Instructional sentence(s) printed under this field\'s heading in the source PDF, verbatim — omit if there is none. Most relevant for long_text_ruled fields.',
+              },
               ruledLineCount: { type: 'number' },
               gridCriteria: { type: 'array', items: { type: 'string' } },
               gridOptions: { type: 'array', items: { type: 'string' } },
@@ -124,6 +132,35 @@ const AUTO_FILL_TOOL = {
   },
 };
 
+const DRAFT_WRITEUP_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'submit_writeup_drafts',
+    description: 'Submit a starter draft paragraph for each long-form write-up field.',
+    parameters: {
+      type: 'object',
+      properties: {
+        drafts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              fieldId: { type: 'string' },
+              value: {
+                type: 'string',
+                description:
+                  'A short draft paragraph in first person, built only from the known facts provided. Use a bracketed placeholder like "[describe your specific tasks here]" for anything specific you were not given — never invent facts. Leave empty string if you have nothing to build from.',
+              },
+            },
+            required: ['fieldId', 'value'],
+          },
+        },
+      },
+      required: ['drafts'],
+    },
+  },
+};
+
 export interface ExtractedSchema {
   sections: FormSection[];
   fields: FieldDefinition[];
@@ -140,7 +177,7 @@ export interface ExtractedSchema {
  */
 async function callTool<T>(
   toolName: string,
-  tools: Array<typeof EXTRACT_FIELDS_TOOL | typeof AUTO_FILL_TOOL>,
+  tools: Array<typeof EXTRACT_FIELDS_TOOL | typeof AUTO_FILL_TOOL | typeof DRAFT_WRITEUP_TOOL>,
   prompt: string,
   maxTokens = 3000,
 ): Promise<T> {
@@ -289,7 +326,7 @@ export async function mapProfileToFields(
 ): Promise<Record<string, string>> {
   if (fields.length === 0) return {};
 
-  const prompt = `Student profile:\n${JSON.stringify(profile, null, 2)}\n\nForm fields needing a value:\n${JSON.stringify(fields, null, 2)}\n\nMatch each field to the closest profile value by meaning, not just exact label text (e.g. "Student's Full Name" -> profile.fullName). Call submit_field_values.`;
+  const prompt = `Student profile:\n${JSON.stringify(profile, null, 2)}\n\nForm fields needing a value:\n${JSON.stringify(fields, null, 2)}\n\nMatch each field to the closest profile value by meaning, not just exact label text (e.g. "Student's Full Name" -> profile.fullName). Only map a field when a profile value genuinely represents that same fact — e.g. profile.department is the student's academic department, never a stand-in for an internship organization, employer, or address, even when nothing else fits. Leave value as an empty string rather than guessing from an unrelated field. Call submit_field_values.`;
 
   const input = await callTool<{ mapping?: Array<{ fieldId?: unknown; value?: unknown }> }>(
     'submit_field_values',
@@ -299,6 +336,41 @@ export async function mapProfileToFields(
 
   const result: Record<string, string> = {};
   for (const entry of input.mapping ?? []) {
+    if (typeof entry.fieldId === 'string' && typeof entry.value === 'string' && entry.value.trim()) {
+      result[entry.fieldId] = entry.value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Drafts a starting paragraph for each long-form write-up field (Introduction, Duties, Challenges, …),
+ * grounded only in facts already known about this submission — never fabricates specifics it wasn't
+ * given. Distinct from mapProfileToFields: that fuzzy-matches existing profile values 1:1 onto simple
+ * text/date fields, this generates new prose the student is expected to review and personalize before
+ * submitting.
+ */
+export async function draftWriteups(
+  knownFacts: Record<string, unknown>,
+  fields: Array<{ id: string; label: string; helpText?: string; ruledLineCount?: number }>,
+): Promise<Record<string, string>> {
+  if (fields.length === 0) return {};
+
+  const prompt = `Known facts about this student and their internship:\n${JSON.stringify(knownFacts, null, 2)}\n\nWrite-up fields needing a starter draft:\n${JSON.stringify(
+    fields,
+    null,
+    2,
+  )}\n\nFor each field, write a short first-person draft paragraph a student could start from, sized to roughly its ruledLineCount (about 10-12 words per ruled line). Ground every sentence only in the known facts above and the field's own helpText instructions — for any specific detail you were not given (e.g. exact tasks performed, specific lessons learned), write a clear bracketed placeholder like "[name the specific tools or systems you used]" instead of inventing one. Call submit_writeup_drafts.`;
+
+  const input = await callTool<{ drafts?: Array<{ fieldId?: unknown; value?: unknown }> }>(
+    'submit_writeup_drafts',
+    [DRAFT_WRITEUP_TOOL],
+    prompt,
+    Math.min(6000, 1000 + fields.length * 400),
+  );
+
+  const result: Record<string, string> = {};
+  for (const entry of input.drafts ?? []) {
     if (typeof entry.fieldId === 'string' && typeof entry.value === 'string' && entry.value.trim()) {
       result[entry.fieldId] = entry.value;
     }
@@ -376,6 +448,7 @@ function sanitizeFields(raw: unknown, sections: FormSection[]): FieldDefinition[
           height: coords['height'] as number,
         },
         required: Boolean(f['required']),
+        ...(typeof f['helpText'] === 'string' && f['helpText'].trim() ? { helpText: f['helpText'] } : {}),
         ...(typeof f['ruledLineCount'] === 'number' ? { ruledLineCount: f['ruledLineCount'] } : {}),
         ...(Array.isArray(f['gridCriteria']) ? { gridCriteria: f['gridCriteria'] as string[] } : {}),
         ...(Array.isArray(f['gridOptions']) ? { gridOptions: f['gridOptions'] as string[] } : {}),

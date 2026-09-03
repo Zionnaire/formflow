@@ -46,6 +46,7 @@ export interface FieldDefinition {
   page: number;
   coordinates: { x: number; y: number; width: number; height: number };
   required: boolean;
+  helpText?: string;
   ruledLineCount?: number;
   gridCriteria?: string[];
   gridOptions?: string[];

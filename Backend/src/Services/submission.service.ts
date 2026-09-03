@@ -4,7 +4,7 @@ import { FormTemplateModel, type IFormTemplate } from '../Models/FormTemplate.mo
 import { UserModel } from '../Models/User.model.js';
 import { ApiError } from '../Utils/errors.js';
 import { logger } from '../Middlewares/logger.js';
-import { mapProfileToFields } from './groq.service.js';
+import { mapProfileToFields, draftWriteups } from './groq.service.js';
 import { downloadAsset, uploadDocument, getSignedUrl } from './cloudinary.service.js';
 import { fillPdf, findMissingRequiredFields, type MissingField } from './pdf.service.js';
 
@@ -77,30 +77,47 @@ function ownerSectionId(template: IFormTemplate): string {
   return template.sections.find((s) => s.role === 'owner')?.sectionId ?? template.sections[0]?.sectionId ?? 'owner';
 }
 
-/** Maps the requesting user's saved profile onto the template's owner-section text/date fields. */
+/**
+ * Auto-fills the template's owner-section fields in two passes: maps the user's saved profile
+ * onto plain text/date fields (brief section 8, step 2), then drafts starter prose for the
+ * long-form write-up fields (Introduction, Duties, Challenges, …) grounded in the profile plus
+ * whatever the first pass just filled in — e.g. the internship's organization name and dates.
+ * Never overwrites a field the student has already filled in by hand.
+ */
 export async function autoFillSubmission(id: string, ownerId: string): Promise<ISubmission> {
   const { submission, template } = await getSubmissionWithTemplate(id, ownerId);
   const user = await UserModel.findById(ownerId);
   if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
 
   const sectionId = ownerSectionId(template);
-  const fillableFields = template.fieldSchema
-    .filter((f) => f.sectionId === sectionId && (f.type === 'text' || f.type === 'date'))
+  const existingData = submission.sections.get(sectionId)?.data ?? {};
+  const profile = { fullName: user.primaryProfile.fullName, ...user.primaryProfile, email: user.primaryProfile.email ?? user.email };
+
+  const mappableFields = template.fieldSchema
+    .filter((f) => f.sectionId === sectionId && (f.type === 'text' || f.type === 'date') && !isFilled(existingData[f.id]))
     .map((f) => ({ id: f.id, label: f.label, type: f.type }));
+  const mapping = await mapProfileToFields(profile, mappableFields);
 
-  const mapping = await mapProfileToFields(
-    { fullName: user.primaryProfile.fullName, ...user.primaryProfile, email: user.primaryProfile.email ?? user.email },
-    fillableFields,
-  );
+  const mergedData = { ...existingData, ...mapping };
 
-  if (Object.keys(mapping).length > 0) {
-    const existingData = submission.sections.get(sectionId)?.data ?? {};
-    setSectionData(submission, sectionId, { ...existingData, ...mapping });
+  const writeupFields = template.fieldSchema
+    .filter((f) => f.sectionId === sectionId && f.type === 'long_text_ruled' && !isFilled(mergedData[f.id]))
+    .map((f) => ({ id: f.id, label: f.label, helpText: f.helpText, ruledLineCount: f.ruledLineCount }));
+  const drafts = await draftWriteups({ ...profile, ...mapping }, writeupFields);
+
+  const finalData = { ...mergedData, ...drafts };
+
+  if (Object.keys(mapping).length > 0 || Object.keys(drafts).length > 0) {
+    setSectionData(submission, sectionId, finalData);
     submission.lastEditedAt = new Date();
     await submission.save();
   }
 
   return submission;
+}
+
+function isFilled(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 export interface ValidationResult {

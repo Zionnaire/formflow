@@ -46,6 +46,7 @@ export function FieldRenderer({ field, value, onChange, suggestedSignature }: Fi
         <Textarea
           id={field.id}
           label={field.label}
+          helperText={field.helpText}
           required={field.required}
           rows={Math.max(4, Math.min(field.ruledLineCount ?? 6, 14))}
           value={value}
