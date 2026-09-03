@@ -5,18 +5,24 @@ import { cn } from '@/lib/utils';
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   helperText?: string;
+  labelAdornment?: React.ReactNode;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { className, label, helperText, id, ...props },
+  { className, label, helperText, labelAdornment, id, ...props },
   ref,
 ) {
   return (
     <div className="flex flex-col gap-xs">
-      {label && (
-        <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor={id}>
-          {label}
-        </label>
+      {(label || labelAdornment) && (
+        <div className="flex items-center justify-between gap-sm">
+          {label && (
+            <label className="font-label-md text-label-md text-on-surface-variant ml-1" htmlFor={id}>
+              {label}
+            </label>
+          )}
+          {labelAdornment}
+        </div>
       )}
       {helperText && <p className="font-body-sm text-body-sm text-on-surface-variant/80 ml-1 -mt-1">{helperText}</p>}
       <textarea

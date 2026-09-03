@@ -4,7 +4,7 @@ import { FormTemplateModel, type IFormTemplate } from '../Models/FormTemplate.mo
 import { UserModel } from '../Models/User.model.js';
 import { ApiError } from '../Utils/errors.js';
 import { logger } from '../Middlewares/logger.js';
-import { mapProfileToFields, draftWriteups } from './groq.service.js';
+import { mapProfileToFields, draftWriteups, suggestSingleFieldValue } from './groq.service.js';
 import { downloadAsset, uploadDocument, getSignedUrl } from './cloudinary.service.js';
 import { fillPdf, findMissingRequiredFields, type MissingField } from './pdf.service.js';
 
@@ -118,6 +118,38 @@ export async function autoFillSubmission(id: string, ownerId: string): Promise<I
 
 function isFilled(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Generates a suggestion for one field on demand (the editor's per-field "Ask AI" button).
+ * Deliberately does not save the submission — the caller drops the result into the editor as
+ * ordinary editable text, same as anything the student typed themselves, so it only persists
+ * once they save their progress.
+ */
+export async function suggestFieldValue(id: string, ownerId: string, fieldId: string): Promise<string> {
+  const { submission, template } = await getSubmissionWithTemplate(id, ownerId);
+  const user = await UserModel.findById(ownerId);
+  if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
+
+  const sectionId = ownerSectionId(template);
+  const field = template.fieldSchema.find((f) => f.id === fieldId && f.sectionId === sectionId);
+  if (!field) throw new ApiError(404, 'Field not found', 'NOT_FOUND');
+  if (field.type !== 'text' && field.type !== 'long_text_ruled') {
+    throw new ApiError(400, 'AI suggestions are only available for text and write-up fields', 'VALIDATION_ERROR');
+  }
+
+  const profile = { fullName: user.primaryProfile.fullName, ...user.primaryProfile, email: user.primaryProfile.email ?? user.email };
+  const existingData = submission.sections.get(sectionId)?.data ?? {};
+  const knownFacts: Record<string, unknown> = { ...profile, ...existingData };
+  delete knownFacts[fieldId];
+
+  return suggestSingleFieldValue(knownFacts, {
+    id: field.id,
+    label: field.label,
+    type: field.type,
+    helpText: field.helpText,
+    ruledLineCount: field.ruledLineCount,
+  });
 }
 
 export interface ValidationResult {

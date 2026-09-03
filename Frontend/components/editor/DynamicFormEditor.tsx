@@ -27,6 +27,7 @@ export function DynamicFormEditor({ submissionId }: { submissionId: string }) {
   const [autoFilling, setAutoFilling] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [suggestingFieldId, setSuggestingFieldId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +92,20 @@ export function DynamicFormEditor({ submissionId }: { submissionId: string }) {
       setError(err instanceof ApiRequestError ? err.message : 'Auto-fill failed.');
     } finally {
       setAutoFilling(false);
+    }
+  }
+
+  async function handleSuggest(fieldId: string) {
+    if (!submission) return;
+    setSuggestingFieldId(fieldId);
+    setError(null);
+    try {
+      const { value } = await api.suggestField(submission._id, fieldId);
+      updateField(fieldId, value);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Could not get an AI suggestion for this field.');
+    } finally {
+      setSuggestingFieldId(null);
     }
   }
 
@@ -173,6 +188,8 @@ export function DynamicFormEditor({ submissionId }: { submissionId: string }) {
                   value={values[field.id] ?? ''}
                   onChange={(value) => updateField(field.id, value)}
                   suggestedSignature={suggestedSignature}
+                  onSuggest={field.type === 'text' || field.type === 'long_text_ruled' ? handleSuggest : undefined}
+                  suggesting={suggestingFieldId === field.id}
                 />
               ))
             )}

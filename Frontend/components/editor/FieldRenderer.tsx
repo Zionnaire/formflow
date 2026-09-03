@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { SignatureBox } from '@/components/ui/SignatureBox';
 import { Icon } from '@/components/ui/Icon';
+import { cn } from '@/lib/utils';
 import type { FieldDefinition } from '@/lib/api';
 
 interface FieldRendererProps {
@@ -11,13 +12,40 @@ interface FieldRendererProps {
   value: string;
   onChange: (value: string) => void;
   suggestedSignature?: string;
+  onSuggest?: (fieldId: string) => void;
+  suggesting?: boolean;
+}
+
+/** Small "Ask AI" affordance for fields where a generated suggestion makes sense (text, long_text_ruled). */
+function AskAiButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      title="Ask AI for a suggestion"
+      className="flex items-center gap-1 px-2 py-0.5 rounded-full font-label-sm text-label-sm text-primary hover:bg-primary-container/40 disabled:opacity-60 transition-colors"
+    >
+      <Icon name="auto_awesome" className={cn('!text-base', loading && 'animate-spin')} />
+      {loading ? 'Thinking…' : 'Ask AI'}
+    </button>
+  );
 }
 
 /** Renders one field per FieldDefinition.type — see Backend/src/Types/index.ts for the vocabulary. */
-export function FieldRenderer({ field, value, onChange, suggestedSignature }: FieldRendererProps) {
+export function FieldRenderer({ field, value, onChange, suggestedSignature, onSuggest, suggesting }: FieldRendererProps) {
   switch (field.type) {
     case 'text':
-      return <Input id={field.id} label={field.label} required={field.required} value={value} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <Input
+          id={field.id}
+          label={field.label}
+          required={field.required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          labelAdornment={onSuggest && <AskAiButton onClick={() => onSuggest(field.id)} loading={Boolean(suggesting)} />}
+        />
+      );
 
     case 'date':
       return (
@@ -51,6 +79,7 @@ export function FieldRenderer({ field, value, onChange, suggestedSignature }: Fi
           rows={Math.max(4, Math.min(field.ruledLineCount ?? 6, 14))}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          labelAdornment={onSuggest && <AskAiButton onClick={() => onSuggest(field.id)} loading={Boolean(suggesting)} />}
         />
       );
 

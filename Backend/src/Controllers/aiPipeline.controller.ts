@@ -7,7 +7,7 @@
  */
 import type { Request, Response } from 'express';
 import { extractAndCreateTemplate } from '../Services/template.service.js';
-import { autoFillSubmission, validateSubmission, generateSubmissionPdf } from '../Services/submission.service.js';
+import { autoFillSubmission, validateSubmission, generateSubmissionPdf, suggestFieldValue } from '../Services/submission.service.js';
 import { createApiSuccess } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 
@@ -30,4 +30,9 @@ export const validateSubmissionHandler = asyncHandler(async (req: Request, res: 
 export const generatePdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const result = await generateSubmissionPdf(req.params['id'] as string, req.user!.sub);
   res.json(createApiSuccess(result));
+});
+
+export const suggestFieldHandler = asyncHandler(async (req: Request, res: Response) => {
+  const value = await suggestFieldValue(req.params['id'] as string, req.user!.sub, req.params['fieldId'] as string);
+  res.json(createApiSuccess({ value }));
 });

@@ -161,6 +161,25 @@ const DRAFT_WRITEUP_TOOL = {
   },
 };
 
+const SUGGEST_FIELD_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'submit_field_suggestion',
+    description: 'Submit a suggested value for this one field.',
+    parameters: {
+      type: 'object',
+      properties: {
+        value: {
+          type: 'string',
+          description:
+            'Your suggested value, grounded only in the known facts given. Use a bracketed placeholder like "[Organization Name]" for anything specific you were not given — never invent a fact. Never return an empty string; the user explicitly asked for a suggestion to edit.',
+        },
+      },
+      required: ['value'],
+    },
+  },
+};
+
 export interface ExtractedSchema {
   sections: FormSection[];
   fields: FieldDefinition[];
@@ -177,7 +196,7 @@ export interface ExtractedSchema {
  */
 async function callTool<T>(
   toolName: string,
-  tools: Array<typeof EXTRACT_FIELDS_TOOL | typeof AUTO_FILL_TOOL | typeof DRAFT_WRITEUP_TOOL>,
+  tools: Array<typeof EXTRACT_FIELDS_TOOL | typeof AUTO_FILL_TOOL | typeof DRAFT_WRITEUP_TOOL | typeof SUGGEST_FIELD_TOOL>,
   prompt: string,
   maxTokens = 3000,
 ): Promise<T> {
@@ -376,6 +395,32 @@ export async function draftWriteups(
     }
   }
   return result;
+}
+
+/**
+ * Generates a suggestion for exactly one field, on demand (the editor's per-field "Ask AI"
+ * button) — unlike mapProfileToFields/draftWriteups, which run as a passive bulk pass and stay
+ * conservative about leaving fields blank, an explicit per-field request should always return
+ * something editable, using bracketed placeholders for anything it wasn't given.
+ */
+export async function suggestSingleFieldValue(
+  knownFacts: Record<string, unknown>,
+  field: { id: string; label: string; type: FieldType; helpText?: string; ruledLineCount?: number },
+): Promise<string> {
+  const prompt = `Known facts about this student and their internship:\n${JSON.stringify(knownFacts, null, 2)}\n\nSuggest a value for this field:\n${JSON.stringify(
+    field,
+    null,
+    2,
+  )}\n\nIf its type is long_text_ruled, write a short first-person draft paragraph sized to roughly its ruledLineCount (about 10-12 words per ruled line), following any helpText instructions. If its type is text, give a concise value. Ground every concrete detail only in the known facts above — for anything specific you were not given, write a clear bracketed placeholder like "[Organization Name]" instead of inventing one. Call submit_field_suggestion.`;
+
+  const input = await callTool<{ value?: unknown }>(
+    'submit_field_suggestion',
+    [SUGGEST_FIELD_TOOL],
+    prompt,
+    Math.min(1500, 300 + (field.ruledLineCount ?? 1) * 60),
+  );
+
+  return typeof input.value === 'string' ? input.value : '';
 }
 
 function round(n: number): number {

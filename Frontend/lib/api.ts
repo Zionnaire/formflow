@@ -239,6 +239,9 @@ export const api = {
 
   autoFillSubmission: (id: string) => request<{ submission: ApiSubmission }>(`/submissions/${id}/auto-fill`, { method: 'POST' }),
 
+  suggestField: (submissionId: string, fieldId: string) =>
+    request<{ value: string }>(`/submissions/${submissionId}/fields/${fieldId}/suggest`, { method: 'POST' }),
+
   validateSubmission: (id: string) => request<ValidationResult>(`/submissions/${id}/validate`, { method: 'POST' }),
 
   generateSubmission: (id: string) =>
