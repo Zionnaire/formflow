@@ -19,7 +19,7 @@ export interface JWTPayload {
   [key: string]: unknown;
 }
 
-/** Section 5 — field type vocabulary shared by Claude extraction and the renderer. */
+/** Section 5 — field type vocabulary shared by Groq-based extraction and the renderer. */
 export type FieldType =
   | 'text'
   | 'date'
@@ -30,6 +30,13 @@ export type FieldType =
   | 'stamp'
   | 'computed';
 
+/**
+ * Fractions of page width/height (0-1), origin top-left — not absolute PDF points.
+ * Services/pdfText.service.ts extracts each PDF text run's position in this same fraction
+ * space, Groq reasons about field position from that layout (Services/groq.service.ts), and
+ * Services/pdf.service.ts converts back to PDF-lib's bottom-left point space per page at
+ * generation time.
+ */
 export interface FieldCoordinates {
   x: number;
   y: number;

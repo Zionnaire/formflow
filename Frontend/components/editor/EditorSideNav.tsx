@@ -12,9 +12,11 @@ interface EditorSideNavProps {
   onAutoFill: () => void;
   onSaveProgress: () => void;
   saved: boolean;
+  saving?: boolean;
+  autoFilling?: boolean;
 }
 
-export function EditorSideNav({ progress, onAutoFill, onSaveProgress, saved }: EditorSideNavProps) {
+export function EditorSideNav({ progress, onAutoFill, onSaveProgress, saved, saving = false, autoFilling = false }: EditorSideNavProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -52,18 +54,20 @@ export function EditorSideNav({ progress, onAutoFill, onSaveProgress, saved }: E
 
           <button
             onClick={onAutoFill}
-            className="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-3 flex items-center gap-3 w-full text-left transition-all active:scale-[0.98]"
+            disabled={autoFilling}
+            className="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-3 flex items-center gap-3 w-full text-left transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            <Icon name="face" />
-            <span className="font-label-md text-label-md">Auto-fill Profile</span>
+            <Icon name={autoFilling ? 'progress_activity' : 'face'} className={autoFilling ? 'animate-spin' : undefined} />
+            <span className="font-label-md text-label-md">{autoFilling ? 'Auto-filling…' : 'Auto-fill Profile'}</span>
           </button>
 
           <button
             onClick={onSaveProgress}
-            className="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-3 flex items-center gap-3 w-full text-left transition-all active:scale-[0.98]"
+            disabled={saving}
+            className="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-3 flex items-center gap-3 w-full text-left transition-all active:scale-[0.98] disabled:opacity-60"
           >
             <Icon name="save" />
-            <span className="font-label-md text-label-md">{saved ? 'Saved just now' : 'Save Progress'}</span>
+            <span className="font-label-md text-label-md">{saving ? 'Saving…' : saved ? 'Saved just now' : 'Save Progress'}</span>
           </button>
         </nav>
 

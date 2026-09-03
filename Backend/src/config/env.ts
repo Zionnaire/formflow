@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/** zod's .default() only kicks in when a key is *missing* — an explicit `KEY=` in .env is an empty string, not absent. */
+function emptyToUndefined(schema: z.ZodTypeAny) {
+  return z.preprocess((v) => (v === '' ? undefined : v), schema);
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
@@ -14,8 +19,11 @@ const EnvSchema = z.object({
   CLOUDINARY_API_KEY: z.string().default(''),
   CLOUDINARY_API_SECRET: z.string().default(''),
 
-  ANTHROPIC_API_KEY: z.string().default(''),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+  // openai/gpt-oss-120b: confirmed active on Groq's live /v1/models endpoint, supports tool
+  // calling + JSON mode (needed for structured field-schema/auto-fill output). Verify against
+  // https://console.groq.com/docs/models before changing — Groq deprecates models frequently.
+  GROQ_API_KEY: z.string().default(''),
+  GROQ_MODEL: emptyToUndefined(z.string().default('openai/gpt-oss-120b')),
 
   ALLOWED_ORIGINS: z
     .string()

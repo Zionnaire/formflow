@@ -74,6 +74,19 @@ export async function uploadDocument(fileBuffer: Buffer, folder: string, origina
   });
 }
 
+/** A signed, time-unlimited delivery URL for an authenticated-type asset — safe to hand to the frontend. */
+export function getSignedUrl(publicId: string, resourceType: 'image' | 'raw' = 'raw'): string {
+  return cloudinary.url(publicId, { type: 'authenticated', sign_url: true, resource_type: resourceType });
+}
+
+/** Downloads an authenticated asset's bytes server-side (e.g. to re-read or re-fill a PDF). */
+export async function downloadAsset(publicId: string, resourceType: 'image' | 'raw' = 'raw'): Promise<Buffer> {
+  const url = getSignedUrl(publicId, resourceType);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to download Cloudinary asset ${publicId}: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export async function deleteAsset(publicId: string, resourceType: 'image' | 'raw' = 'image'): Promise<void> {
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: 'authenticated' });

@@ -4,6 +4,7 @@ import { createApiSuccess, createApiError } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 import { API_ERROR_CODES } from '../Types/index.js';
 import { env } from '../config/env.js';
+import { parseDurationMs } from '../Utils/duration.js';
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -12,8 +13,10 @@ const COOKIE_OPTS = {
   path: '/',
 };
 
-const ACCESS_TTL_MS = 15 * 60 * 1000;
-const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// Derived from the same env values the tokens are actually signed with — a cookie that
+// outlives (or expires before) the JWT it carries defeats the point of an expiry.
+const ACCESS_TTL_MS = parseDurationMs(env.JWT_ACCESS_TOKEN_TTL);
+const REFRESH_TTL_MS = parseDurationMs(env.JWT_REFRESH_TOKEN_TTL);
 
 export const registerHandler = asyncHandler(async (req: Request, res: Response) => {
   const { accessToken, refreshToken, user } = await registerUser(req.body.email, req.body.password, req.body.fullName);

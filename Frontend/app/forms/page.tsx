@@ -1,9 +1,9 @@
+import Link from 'next/link';
 import { PageShell } from '@/components/layout/PageShell';
 import { RequireAuth } from '@/components/auth/RequireAuth';
-import { FormCard } from '@/components/forms/FormCard';
+import { MyFormsList } from '@/components/forms/MyFormsList';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { myForms } from '@/lib/mock-data';
 
 export const metadata = { title: 'FormFlow - My Forms' };
 
@@ -21,23 +21,15 @@ export default function MyFormsPage() {
                 Pick up where you left off or review your completed submissions. Your progress is always saved.
               </p>
             </div>
-            <Button variant="primary" className="rounded">
-              <Icon name="add" className="text-[20px]" />
-              New Form
-            </Button>
+            <Link href="/">
+              <Button variant="primary" className="rounded">
+                <Icon name="add" className="text-[20px]" />
+                New Form
+              </Button>
+            </Link>
           </header>
 
-          {myForms.length === 0 ? (
-            <p className="text-on-surface-variant font-body-md text-body-md py-lg text-center">
-              You haven&apos;t started any forms yet.
-            </p>
-          ) : (
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-              {myForms.map((form) => (
-                <FormCard key={form.id} form={form} />
-              ))}
-            </section>
-          )}
+          <MyFormsList />
         </main>
       </RequireAuth>
     </PageShell>

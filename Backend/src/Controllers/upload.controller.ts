@@ -8,7 +8,7 @@ import { API_ERROR_CODES } from '../Types/index.js';
 
 /**
  * Accepts a raw PDF, hashes it for template-cache dedup, and uploads to Cloudinary
- * on a cache miss. Field extraction (Claude) is a separate follow-up step —
+ * on a cache miss. Field extraction (Groq) is a separate follow-up step —
  * see aiPipeline.controller.ts.
  */
 export const uploadFormHandler = asyncHandler(async (req: Request, res: Response) => {

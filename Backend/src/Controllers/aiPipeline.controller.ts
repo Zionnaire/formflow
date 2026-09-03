@@ -1,23 +1,33 @@
 /**
  * AI-assisted PDF pipeline — field extraction, profile auto-fill mapping, validation,
- * and final PDF generation (brief section 8). These require an Anthropic API key and a
- * pdf-lib fill pass and are intentionally left unimplemented until that integration work
- * is scheduled (brief section 10, step 1 and step 5-6).
- *
- * Each stays a narrow, single-purpose endpoint per the brief's guidance so template
- * caching can skip extraction entirely once a fileHash is already known.
+ * and final PDF generation (brief section 8). Extraction and auto-fill call Groq
+ * (Services/groq.service.ts) over text flattened from the PDF (Services/pdfText.service.ts);
+ * validation and generation are deterministic (Services/pdf.service.ts) — no LLM call needed
+ * for exact-match required-field checks or for overlaying already-known values onto the PDF.
  */
 import type { Request, Response } from 'express';
-import { createApiError } from '../Utils/response.js';
-import { API_ERROR_CODES } from '../Types/index.js';
+import { extractAndCreateTemplate } from '../Services/template.service.js';
+import { autoFillSubmission, validateSubmission, generateSubmissionPdf } from '../Services/submission.service.js';
+import { createApiSuccess } from '../Utils/response.js';
+import { asyncHandler } from '../Utils/asyncHandler.js';
 
-function notImplemented(_req: Request, res: Response): void {
-  res
-    .status(501)
-    .json(createApiError(API_ERROR_CODES.NOT_IMPLEMENTED, 'This AI pipeline step is not wired up yet'));
-}
+export const extractFieldsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { fileHash, cloudinaryId, title } = req.body as { fileHash: string; cloudinaryId: string; title: string };
+  const template = await extractAndCreateTemplate(fileHash, cloudinaryId, title, req.user!.sub);
+  res.status(201).json(createApiSuccess({ template }));
+});
 
-export const extractFieldsHandler = notImplemented;
-export const autoFillHandler = notImplemented;
-export const validateSubmissionHandler = notImplemented;
-export const generatePdfHandler = notImplemented;
+export const autoFillHandler = asyncHandler(async (req: Request, res: Response) => {
+  const submission = await autoFillSubmission(req.params['id'] as string, req.user!.sub);
+  res.json(createApiSuccess({ submission }));
+});
+
+export const validateSubmissionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await validateSubmission(req.params['id'] as string, req.user!.sub);
+  res.json(createApiSuccess(result));
+});
+
+export const generatePdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await generateSubmissionPdf(req.params['id'] as string, req.user!.sub);
+  res.json(createApiSuccess(result));
+});
