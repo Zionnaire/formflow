@@ -12,6 +12,7 @@ import {
   validateSubmission,
   generateSubmissionPdf,
   downloadGeneratedPdf,
+  emailGeneratedPdf,
   suggestFieldValue,
 } from '../Services/submission.service.js';
 import { createApiSuccess } from '../Utils/response.js';
@@ -48,4 +49,10 @@ export const downloadPdfHandler = asyncHandler(async (req: Request, res: Respons
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   res.send(bytes);
+});
+
+export const emailPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { to, message } = req.body as { to: string; message?: string };
+  await emailGeneratedPdf(req.params['id'] as string, req.user!.sub, to, message);
+  res.json(createApiSuccess({ sent: true }));
 });

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { DocumentPreview } from '@/components/review/DocumentPreview';
+import { EmailSendPanel } from '@/components/review/EmailSendPanel';
 import { api, ApiRequestError, type ApiSubmission, type ValidationResult } from '@/lib/api';
 
 export function DynamicReview({ submissionId }: { submissionId: string }) {
@@ -137,6 +138,9 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
                 {generating ? 'Generating…' : 'Generate PDF'}
               </Button>
             )}
+
+            <EmailSendPanel submissionId={submissionId} disabled={!hasGeneratedPdf} />
+
             {error && (
               <p role="alert" className="font-label-sm text-label-sm text-error text-center">
                 {error}

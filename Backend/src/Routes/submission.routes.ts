@@ -12,11 +12,17 @@ import {
   generatePdfHandler,
   suggestFieldHandler,
   downloadPdfHandler,
+  emailPdfHandler,
 } from '../Controllers/aiPipeline.controller.js';
 import { authenticate } from '../Middlewares/auth.js';
 import { validate } from '../Middlewares/validate.js';
 import { aiPipelineRateLimiter } from '../Middlewares/rateLimiter.js';
-import { CreateSubmissionSchema, PatchSectionSchema, CreateShareSchema } from '../Validators/submission.validators.js';
+import {
+  CreateSubmissionSchema,
+  PatchSectionSchema,
+  CreateShareSchema,
+  EmailSubmissionSchema,
+} from '../Validators/submission.validators.js';
 
 const router: IRouter = Router();
 
@@ -32,5 +38,6 @@ router.post('/:id/fields/:fieldId/suggest', aiPipelineRateLimiter, suggestFieldH
 router.post('/:id/validate', validateSubmissionHandler);
 router.post('/:id/generate', aiPipelineRateLimiter, generatePdfHandler);
 router.get('/:id/download', downloadPdfHandler);
+router.post('/:id/email', aiPipelineRateLimiter, validate(EmailSubmissionSchema), emailPdfHandler);
 
 export { router as submissionRouter };

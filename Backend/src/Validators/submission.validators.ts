@@ -16,3 +16,8 @@ export const CreateShareSchema = z.object({
 export const SubmitShareSchema = z.object({
   data: z.record(z.unknown()),
 });
+
+export const EmailSubmissionSchema = z.object({
+  to: z.string().email(),
+  message: z.string().trim().max(2000).optional(),
+});

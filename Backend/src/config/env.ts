@@ -32,6 +32,14 @@ const EnvSchema = z.object({
 
   SHARE_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(14),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+
+  // Emailing the finished PDF (brief section 9-ish: hand the completed form to whoever needs it)
+  // — absent in dev by default; the feature 503s cleanly rather than failing confusingly.
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM: emptyToUndefined(z.string().default('FormFlow <no-reply@formflow.app>')),
 });
 
 function parseEnv() {

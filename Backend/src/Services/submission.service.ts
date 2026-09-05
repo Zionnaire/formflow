@@ -7,6 +7,7 @@ import { logger } from '../Middlewares/logger.js';
 import { mapProfileToFields, draftWriteups, suggestSingleFieldValue } from './groq.service.js';
 import { downloadAsset, uploadDocument, getSignedUrl } from './cloudinary.service.js';
 import { fillPdf, findMissingRequiredFields, type MissingField } from './pdf.service.js';
+import { sendFormEmail } from './email.service.js';
 
 export async function createSubmission(formTemplateId: string, ownerId: string): Promise<ISubmission> {
   const template = await FormTemplateModel.findById(formTemplateId);
@@ -204,4 +205,22 @@ export async function downloadGeneratedPdf(id: string, ownerId: string): Promise
   const bytes = await downloadAsset(submission.generatedPdfPublicId, 'raw');
   const safeTitle = template.title.replace(/[^\w -]+/g, '').trim();
   return { bytes, filename: `${safeTitle || 'form'}.pdf` };
+}
+
+/** Emails the finished PDF to whoever the student needs to send it to (an advisor, a sponsor, ...). */
+export async function emailGeneratedPdf(id: string, ownerId: string, to: string, message?: string): Promise<void> {
+  const [{ submission, template }, user] = await Promise.all([getSubmissionWithTemplate(id, ownerId), UserModel.findById(ownerId)]);
+  if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
+  if (!submission.generatedPdfPublicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
+
+  const bytes = await downloadAsset(submission.generatedPdfPublicId, 'raw');
+  const safeTitle = template.title.replace(/[^\w -]+/g, '').trim();
+
+  await sendFormEmail({
+    to,
+    senderName: user.primaryProfile.fullName || user.email,
+    formTitle: template.title,
+    message,
+    attachment: { filename: `${safeTitle || 'form'}.pdf`, content: bytes },
+  });
 }

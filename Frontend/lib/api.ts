@@ -260,6 +260,12 @@ export const api = {
    */
   getDownloadUrl: (submissionId: string) => `${API_URL}/submissions/${submissionId}/download`,
 
+  emailSubmission: (submissionId: string, to: string, message?: string) =>
+    request<{ sent: true }>(`/submissions/${submissionId}/email`, {
+      method: 'POST',
+      body: JSON.stringify({ to, message }),
+    }),
+
   // ── Shared-fill links (multi-party sections — brief section 7.3) ──────────
   createShare: (submissionId: string, sectionId: string, role: PartyRole) =>
     request<{ share: { token: string }; url: string }>(`/submissions/${submissionId}/share`, {
