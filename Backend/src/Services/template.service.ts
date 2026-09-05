@@ -39,6 +39,20 @@ export async function extractAndCreateTemplate(
   const bytes = await downloadAsset(cloudinaryId, 'raw');
   const { pageCount, items } = await extractPositionedText(bytes);
 
+  // Fail fast with a clear, actionable message instead of sending Groq an empty layout — it
+  // can't call the required tool with nothing to reason about, and its resulting 400 ("Tool
+  // choice is required, but model did not call a tool") gives no hint that the real problem is
+  // upstream (confirmed against a real scanned-looking upload). Zero extracted text runs from a
+  // real PDF means there's no text layer at all — almost always a scanned image, not a bug in
+  // how we're reading it.
+  if (items.length === 0) {
+    throw new ApiError(
+      422,
+      'No extractable text was found in this PDF. It may be a scanned image rather than a text-based document — try exporting it directly from the original word processor, or running it through OCR first.',
+      'VALIDATION_ERROR',
+    );
+  }
+
   const { sections, fields } = await extractFieldsFromPdf(items, pageCount, title);
 
   const template = await FormTemplateModel.create({
