@@ -5,10 +5,12 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { PageImageCanvas } from '@/components/editor/PageImageCanvas';
+import { PagePicker } from '@/components/editor/PagePicker';
+import { getCellCenter, type CellCoord } from '@/lib/ratingGridGeometry';
 import { api, ApiRequestError, type ApiFormTemplate, type FieldDefinition } from '@/lib/api';
 
 type Coordinates = FieldDefinition['coordinates'];
-type CellCoord = { x: number; y: number };
 
 function clampOffset(v: number): number {
   return Math.min(1.3, Math.max(-0.2, v));
@@ -16,19 +18,6 @@ function clampOffset(v: number): number {
 
 function clampSize(v: number): number {
   return Math.min(1.4, Math.max(0.005, v));
-}
-
-/** Same uniform-division fallback pdf.service.ts's drawRatingGrid computes server-side, so an
- * uncorrected cell marker starts out exactly where the generated PDF would actually mark it. */
-function defaultCellCenter(field: FieldDefinition, criterionIndex: number, optionIndex: number): CellCoord {
-  const criteriaCount = field.gridCriteria?.length ?? 1;
-  const optionsCount = field.gridOptions?.length ?? 1;
-  const colWidth = field.coordinates.width / (optionsCount + 1); // +1 for the criteria-label column
-  const rowHeight = field.coordinates.height / criteriaCount;
-  return {
-    x: field.coordinates.x + (optionIndex + 1.5) * colWidth,
-    y: field.coordinates.y + (criterionIndex + 0.5) * rowHeight,
-  };
 }
 
 /**
@@ -145,10 +134,6 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
     window.addEventListener('pointerup', onUp);
   }
 
-  function getCellCenter(field: FieldDefinition, criterion: string, option: string, criterionIndex: number, optionIndex: number): CellCoord {
-    return gridOverrides[field.id]?.[criterion]?.[option] ?? defaultCellCenter(field, criterionIndex, optionIndex);
-  }
-
   async function persistGridCell(fieldId: string, criterion: string, option: string, next: CellCoord) {
     setSavingId(fieldId);
     setError(null);
@@ -212,25 +197,14 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
         </Link>
       </header>
 
-      {template.pageCount > 1 && (
-        <div className="flex items-center gap-xs overflow-x-auto pb-1">
-          {Array.from({ length: template.pageCount }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => {
-                setPage(n);
-                setSelectedId(null);
-              }}
-              className={`shrink-0 px-3 py-1.5 rounded-full font-label-sm text-label-sm transition-colors ${
-                n === page ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              Page {n}
-            </button>
-          ))}
-        </div>
-      )}
+      <PagePicker
+        pageCount={template.pageCount}
+        page={page}
+        onChange={(n) => {
+          setPage(n);
+          setSelectedId(null);
+        }}
+      />
 
       {error && (
         <p role="alert" className="font-label-sm text-label-sm text-error">
@@ -240,18 +214,13 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
 
       <div className="w-full bg-surface-container-lowest rounded-lg shadow-card p-md overflow-x-auto">
         {pageImage ? (
-          <div
+          <PageImageCanvas
             ref={containerRef}
-            className="relative mx-auto select-none"
-            style={{ width: '100%', maxWidth: 900, aspectRatio: `${pageImage.width} / ${pageImage.height}` }}
+            src={api.getTemplatePagePreviewUrl(template._id, page)}
+            alt={`Page ${page} of ${template.title}`}
+            width={pageImage.width}
+            height={pageImage.height}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- server-rendered preview, not a static asset */}
-            <img
-              src={api.getTemplatePagePreviewUrl(template._id, page)}
-              alt={`Page ${page} of ${template.title}`}
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-              draggable={false}
-            />
             {pageFields.map((field) => {
               const c = coords[field.id];
               if (!c) return null;
@@ -288,7 +257,7 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
                 .flatMap((field) =>
                   field.gridCriteria!.flatMap((criterion, ri) =>
                     field.gridOptions!.map((option, oi) => {
-                      const cell = getCellCenter(field, criterion, option, ri, oi);
+                      const cell = getCellCenter(field, gridOverrides[field.id], criterion, option, ri, oi);
                       return (
                         <div
                           key={`${field.id}::${criterion}::${option}`}
@@ -301,7 +270,7 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
                     }),
                   ),
                 )}
-          </div>
+          </PageImageCanvas>
         ) : (
           <p className="text-center text-on-surface-variant font-body-md text-body-md py-xl">
             No page preview available for page {page}.
