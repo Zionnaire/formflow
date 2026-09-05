@@ -216,11 +216,16 @@ async function callTool<T>(
       messages: [{ role: 'user', content: prompt }],
     });
   } catch (err) {
+    if (err instanceof ApiError) throw err;
     const status = (err as { status?: number }).status;
     if (status === 413 || status === 429) {
       throw new ApiError(413, 'This form is too large for the current Groq plan/tier to process in one request', 'VALIDATION_ERROR');
     }
-    throw err;
+    // Any other Groq failure (e.g. a 400 "did not call a tool" — confirmed to happen when the
+    // model has nothing usable to reason about) should never reach the client as a raw provider
+    // error; it's not written to be user-facing and none of it is actionable for them anyway.
+    logger.error({ err, toolName }, 'Groq API call failed');
+    throw new ApiError(502, 'The AI service could not process this request — please try again shortly', 'INTERNAL_ERROR');
   }
 
   const toolCall = completion.choices[0]?.message?.tool_calls?.[0];
