@@ -192,6 +192,34 @@ export async function generateSubmissionPdf(id: string, ownerId: string): Promis
 }
 
 /**
+ * Cloudinary's raw+authenticated URLs are shaped .../v<version>/<public_id>?<query> — the
+ * public_id is exactly the path segment between the version and the query string.
+ */
+function extractPublicIdFromCloudinaryUrl(url: string): string | undefined {
+  return url.match(/\/v\d+\/([^?]+)/)?.[1];
+}
+
+/**
+ * generatedPdfPublicId was added after generatedPdfUrl already existed — submissions generated
+ * before that (confirmed on a real one: status "complete", a valid generatedPdfUrl, but no
+ * generatedPdfPublicId) would otherwise 404 on /download and /email despite genuinely having a
+ * generated PDF. Falls back to parsing the public_id back out of the legacy URL, and backfills
+ * the field so later calls skip the fallback.
+ */
+async function resolveGeneratedPdfPublicId(submission: ISubmission): Promise<string | undefined> {
+  if (submission.generatedPdfPublicId) return submission.generatedPdfPublicId;
+  if (!submission.generatedPdfUrl) return undefined;
+
+  const publicId = extractPublicIdFromCloudinaryUrl(submission.generatedPdfUrl);
+  if (!publicId) return undefined;
+
+  submission.generatedPdfPublicId = publicId;
+  await submission.save();
+  logger.info({ submissionId: submission._id.toString() }, 'Backfilled generatedPdfPublicId from legacy generatedPdfUrl');
+  return publicId;
+}
+
+/**
  * Re-fetches the generated PDF's bytes so the API can serve them itself with an explicit
  * application/pdf content type and a friendly filename — Cloudinary's raw+authenticated delivery
  * can't reliably serve a signed URL that ends in a real .pdf extension (a dot in the public_id
@@ -200,9 +228,10 @@ export async function generateSubmissionPdf(id: string, ownerId: string): Promis
  */
 export async function downloadGeneratedPdf(id: string, ownerId: string): Promise<{ bytes: Buffer; filename: string }> {
   const { submission, template } = await getSubmissionWithTemplate(id, ownerId);
-  if (!submission.generatedPdfPublicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
+  const publicId = await resolveGeneratedPdfPublicId(submission);
+  if (!publicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
 
-  const bytes = await downloadAsset(submission.generatedPdfPublicId, 'raw');
+  const bytes = await downloadAsset(publicId, 'raw');
   const safeTitle = template.title.replace(/[^\w -]+/g, '').trim();
   return { bytes, filename: `${safeTitle || 'form'}.pdf` };
 }
@@ -211,9 +240,10 @@ export async function downloadGeneratedPdf(id: string, ownerId: string): Promise
 export async function emailGeneratedPdf(id: string, ownerId: string, to: string, message?: string): Promise<void> {
   const [{ submission, template }, user] = await Promise.all([getSubmissionWithTemplate(id, ownerId), UserModel.findById(ownerId)]);
   if (!user) throw new ApiError(404, 'User not found', 'NOT_FOUND');
-  if (!submission.generatedPdfPublicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
+  const publicId = await resolveGeneratedPdfPublicId(submission);
+  if (!publicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
 
-  const bytes = await downloadAsset(submission.generatedPdfPublicId, 'raw');
+  const bytes = await downloadAsset(publicId, 'raw');
   const safeTitle = template.title.replace(/[^\w -]+/g, '').trim();
 
   await sendFormEmail({
