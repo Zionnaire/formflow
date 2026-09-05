@@ -68,6 +68,8 @@ export interface ApiFormTemplate {
   usageCount: number;
   fieldSchema: FieldDefinition[];
   sections: FormSectionDef[];
+  renderDPI?: number;
+  pageImages?: Array<{ page: number; cloudinaryPublicId: string; width: number; height: number }>;
   createdAt: string;
 }
 
@@ -220,6 +222,14 @@ export const api = {
     }),
 
   getTemplate: (id: string) => request<{ template: ApiFormTemplate }>(`/templates/${id}`),
+
+  getTemplatePagePreviewUrl: (templateId: string, pageNumber: number) => `${API_URL}/templates/${templateId}/pages/${pageNumber}/preview`,
+
+  updateFieldCoordinates: (templateId: string, fieldId: string, coordinates: FieldDefinition['coordinates']) =>
+    request<{ template: ApiFormTemplate }>(`/templates/${templateId}/fields/${fieldId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ coordinates }),
+    }),
 
   // ── Submissions ───────────────────────────────────────────────────────────
   createSubmission: (formTemplateId: string) =>

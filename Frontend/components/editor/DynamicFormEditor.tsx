@@ -153,6 +153,7 @@ export function DynamicFormEditor({ submissionId }: { submissionId: string }) {
   return (
     <main className="flex-1 w-full md:w-[calc(100%-20rem)] flex flex-col min-h-screen pb-24 md:pb-0 pt-16 md:pt-0 relative overflow-y-auto">
       <EditorSideNav
+        submissionId={submission._id}
         progress={progress}
         onAutoFill={handleAutoFill}
         onSaveProgress={handleSaveProgress}

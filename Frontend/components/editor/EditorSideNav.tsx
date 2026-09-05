@@ -8,6 +8,8 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { cn } from '@/lib/utils';
 
 interface EditorSideNavProps {
+  /** Omitted by the static demo editor (no real template to adjust) — hides the "Fix field positions" link. */
+  submissionId?: string;
   progress: number;
   onAutoFill: () => void;
   onSaveProgress: () => void;
@@ -16,7 +18,15 @@ interface EditorSideNavProps {
   autoFilling?: boolean;
 }
 
-export function EditorSideNav({ progress, onAutoFill, onSaveProgress, saved, saving = false, autoFilling = false }: EditorSideNavProps) {
+export function EditorSideNav({
+  submissionId,
+  progress,
+  onAutoFill,
+  onSaveProgress,
+  saved,
+  saving = false,
+  autoFilling = false,
+}: EditorSideNavProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -69,6 +79,16 @@ export function EditorSideNav({ progress, onAutoFill, onSaveProgress, saved, sav
             <Icon name="save" />
             <span className="font-label-md text-label-md">{saving ? 'Saving…' : saved ? 'Saved just now' : 'Save Progress'}</span>
           </button>
+
+          {submissionId && (
+            <Link
+              href={`/forms/${submissionId}/adjust`}
+              className="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-3 flex items-center gap-3 w-full text-left transition-all active:scale-[0.98]"
+            >
+              <Icon name="edit_location_alt" />
+              <span className="font-label-md text-label-md">Fix field positions</span>
+            </Link>
+          )}
         </nav>
 
         <div className="mt-auto pt-md">

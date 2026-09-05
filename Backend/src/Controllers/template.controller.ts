@@ -19,6 +19,10 @@ export const getTemplatePagePreviewHandler = asyncHandler(async (req: Request, r
   const png = await getTemplatePagePreview(req.params['id'] as string, pageNumber);
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'private, max-age=3600');
+  // helmet's default Cross-Origin-Resource-Policy (same-origin) blocks the frontend's <img>
+  // from loading this cross-origin during local dev (different port); this response is meant
+  // to be embedded from the frontend origin, so relax it just for this route.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.send(png);
 });
 
