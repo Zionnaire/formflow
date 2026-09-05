@@ -347,7 +347,7 @@ export async function mapProfileToFields(
 ): Promise<Record<string, string>> {
   if (fields.length === 0) return {};
 
-  const prompt = `Student profile:\n${JSON.stringify(profile, null, 2)}\n\nForm fields needing a value:\n${JSON.stringify(fields, null, 2)}\n\nMatch each field to the closest profile value by meaning, not just exact label text (e.g. "Student's Full Name" -> profile.fullName). Only map a field when a profile value genuinely represents that same fact — e.g. profile.department is the student's academic department, never a stand-in for an internship organization, employer, or address, even when nothing else fits. Leave value as an empty string rather than guessing from an unrelated field. Call submit_field_values.`;
+  const prompt = `Student profile:\n${JSON.stringify(profile, null, 2)}\n\nForm fields needing a value:\n${JSON.stringify(fields, null, 2)}\n\nMatch each field to the closest profile value by meaning, not just exact label text (e.g. "Student's Full Name" -> profile.fullName). Only map a field when a profile value genuinely represents that same fact — e.g. profile.department is the student's academic department, never a stand-in for an internship organization, employer, or address; profile.dateOfBirth is a fixed personal fact, never a stand-in for a signature date, submission date, or any other date describing when something in this document happened — even when nothing else fits. Leave value as an empty string rather than guessing from an unrelated field. Call submit_field_values.`;
 
   const input = await callTool<{ mapping?: Array<{ fieldId?: unknown; value?: unknown }> }>(
     'submit_field_values',
