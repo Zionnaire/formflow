@@ -24,8 +24,16 @@ export async function createSubmission(formTemplateId: string, ownerId: string):
   return submission;
 }
 
+/**
+ * Populates everything MyFormsList needs to compute each card's title and progress percentage
+ * (title, fieldSchema, sections) in this one query — it used to populate only title/pageCount,
+ * forcing the frontend into a follow-up GET /templates/:id per *unique* template referenced by
+ * the list (an N+1 round-trip pattern that was the actual cause of "My Forms" loading slowly).
+ */
 export async function listSubmissionsForOwner(ownerId: string): Promise<ISubmission[]> {
-  return SubmissionModel.find({ ownerId }).sort({ lastEditedAt: -1 }).populate('formTemplateId', 'title pageCount');
+  return SubmissionModel.find({ ownerId })
+    .sort({ lastEditedAt: -1 })
+    .populate('formTemplateId', 'title pageCount fieldSchema sections');
 }
 
 export async function getSubmissionForOwner(id: string, ownerId: string): Promise<ISubmission> {

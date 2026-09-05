@@ -31,20 +31,16 @@ export function MyFormsList() {
     let cancelled = false;
     (async () => {
       try {
+        // formTemplateId comes back populated with everything needed below (title, fieldSchema,
+        // sections) — no follow-up per-template fetch required (previously an N+1 round-trip
+        // per unique template referenced by the list, which was the actual source of "My Forms"
+        // loading slowly).
         const { submissions } = await api.listSubmissions();
-
-        const templateIds = [
-          ...new Set(submissions.map((s) => (typeof s.formTemplateId === 'string' ? s.formTemplateId : s.formTemplateId._id))),
-        ];
-        const templates = await Promise.all(templateIds.map((id) => api.getTemplate(id).then((r) => r.template)));
-        const templateById = new Map(templates.map((t) => [t._id, t]));
-
         if (cancelled) return;
 
         setForms(
           submissions.map((s): MyForm => {
-            const templateId = typeof s.formTemplateId === 'string' ? s.formTemplateId : s.formTemplateId._id;
-            const template = templateById.get(templateId);
+            const template = typeof s.formTemplateId === 'string' ? undefined : s.formTemplateId;
             return {
               id: s._id,
               templateTitle: template?.title ?? 'Untitled form',
