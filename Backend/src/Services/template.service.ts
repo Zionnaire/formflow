@@ -50,6 +50,10 @@ export async function extractAndCreateTemplate(
   // real PDF means there's no text layer at all — almost always a scanned image, not a bug in
   // how we're reading it.
   if (items.length === 0) {
+    // Instrumentation for the text-run-vs-vision-extraction question: log every upload that
+    // fails this quality check, so a real, growing sample can eventually answer whether scanned
+    // uploads are common enough to justify a vision-based fallback path, rather than guessing.
+    logger.warn({ fileHash, title }, 'Extraction quality check failed: zero text runs extracted from upload');
     throw new ApiError(
       422,
       'No extractable text was found in this PDF. It may be a scanned image rather than a text-based document — try exporting it directly from the original word processor, or running it through OCR first.',
@@ -58,6 +62,16 @@ export async function extractAndCreateTemplate(
   }
 
   const { sections, fields } = await extractFieldsFromPdf(items, pageCount, title);
+
+  // Same instrumentation for the other quality signal named in the extraction-vs-vision
+  // question: a real form that has no checkbox fields at all is plausible, but is also exactly
+  // what an extraction pass that couldn't resolve an unlabeled checkbox pattern would produce —
+  // logging every occurrence is how that gets told apart from a real, growing sample instead of
+  // a guess.
+  const checkboxCount = fields.filter((f) => f.type === 'checkbox').length;
+  if (checkboxCount === 0) {
+    logger.warn({ fileHash, title, fieldCount: fields.length }, 'Extraction quality check failed: zero checkboxes extracted from upload');
+  }
 
   // Rasterize every page once, now, at upload time — the canonical visual reference the
   // field-position editor and ruled-line detection measure against, instead of each feature
