@@ -145,7 +145,18 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
         field.coordinates,
       );
     } else if (field.type === 'long_text_ruled') {
-      drawWrappedText(page, value, boxX, pageHeight - boxTopY, boxWidth || pageWidth - boxX, boxHeight, useFont, fontSize);
+      drawWrappedText(
+        page,
+        value,
+        boxX,
+        pageHeight - boxTopY,
+        boxWidth || pageWidth - boxX,
+        boxHeight,
+        useFont,
+        fontSize,
+        field.detectedRuleYPositions,
+        pageHeight,
+      );
     } else {
       const drawY = pageHeight - boxTopY - fontSize;
       drawTextOpaque(page, value, boxX, drawY, fontSize, useFont);
@@ -159,21 +170,93 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
 }
 
 /**
- * Wraps text to maxWidth and stops once it would run past maxHeight — an extraction-estimated
- * box is sometimes taller than the space really available before the next field's own label
- * (confirmed on a real form: a short comment still landed close to the field below it), so this
- * bounds how far a *long* draft can run on to make that failure mode strictly bounded rather than
- * unbounded, even though it can't correct a box that was mis-measured from the very first line.
- *
- * Deliberately doesn't try to match line spacing to the box's own pre-printed ruled lines —
- * ruledLineCount is an AI guess (confirmed on a real form to be off by as much as 2x) and can't
- * be trusted for that. drawTextOpaque masks whatever's underneath each line instead, so a
- * mismatched rule can no longer show through the middle of the text.
+ * Wraps text and picks one of two placement strategies. When rule-detection
+ * (Services/ruleDetection.service.ts) found at least as many real printed rules as this box's own
+ * height would plausibly hold, each wrapped line is anchored to a real rule instead of a guess.
+ * Otherwise falls back to the previous lineHeight/masking approach — detection can legitimately
+ * find zero or too few rules (a field whose printed area isn't ruled at all, a scan artifact, a
+ * rule too faint to cross the brightness threshold), and an assumed spacing beats no text at all.
  */
-function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, maxWidth: number, maxHeight: number, font: PDFFont, fontSize: number): void {
+function drawWrappedText(
+  page: PDFPage,
+  text: string,
+  x: number,
+  topY: number,
+  maxWidth: number,
+  maxHeight: number,
+  font: PDFFont,
+  fontSize: number,
+  detectedRuleYPositions: number[] | undefined,
+  pageHeight: number,
+): void {
+  const words = text.split(/\s+/);
+  const assumedLineHeight = fontSize * 1.4;
+  const plausibleLineCount = Math.max(1, Math.floor(maxHeight / assumedLineHeight));
+  const rules = detectedRuleYPositions ? [...detectedRuleYPositions].sort((a, b) => a - b) : [];
+
+  if (rules.length >= plausibleLineCount) {
+    drawWrappedTextOnDetectedRules(page, words, x, maxWidth, font, fontSize, rules, pageHeight);
+  } else {
+    drawWrappedTextWithMasking(page, words, x, topY, maxWidth, maxHeight, font, fontSize);
+  }
+}
+
+/**
+ * Places each wrapped line's baseline just above its corresponding real printed rule (not an
+ * assumed lineHeight) — detected by scanning pixels, not guessed. No opaque masking needed here:
+ * the baseline sits above the rule by construction, so a printed rule can no longer cross through
+ * the middle of the text the way an estimated lineHeight could. Runs out of real rules before it
+ * runs out of words, it stops there — same bounded-truncation philosophy as the masking fallback,
+ * rather than inventing a rule position beyond what was actually detected.
+ */
+function drawWrappedTextOnDetectedRules(
+  page: PDFPage,
+  words: string[],
+  x: number,
+  maxWidth: number,
+  font: PDFFont,
+  fontSize: number,
+  ruleYFractions: number[],
+  pageHeight: number,
+): void {
+  const baselineGap = fontSize * 0.2;
+  let line = '';
+  let ruleIndex = 0;
+
+  function flush(): boolean {
+    if (ruleIndex >= ruleYFractions.length) return false;
+    const y = pageHeight - ruleYFractions[ruleIndex]! * pageHeight + baselineGap;
+    page.drawText(line, { x, y, size: fontSize, font, color: rgb(0.11, 0.11, 0.1) });
+    ruleIndex++;
+    return true;
+  }
+
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+      if (!flush()) return;
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) flush();
+}
+
+/**
+ * Stops once it would run past maxHeight — an extraction-estimated box is sometimes taller than
+ * the space really available before the next field's own label (confirmed on a real form: a short
+ * comment still landed close to the field below it), so this bounds how far a *long* draft can
+ * run on, even though it can't correct a box that was mis-measured from the very first line.
+ *
+ * The safety net for fields rule-detection couldn't confidently place — doesn't try to match line
+ * spacing to the box's own pre-printed ruled lines (an assumed lineHeight can't be trusted for
+ * that; see drawWrappedText), so drawTextOpaque masks whatever's underneath each line instead, so
+ * a mismatched rule can no longer show through the middle of the text.
+ */
+function drawWrappedTextWithMasking(page: PDFPage, words: string[], x: number, topY: number, maxWidth: number, maxHeight: number, font: PDFFont, fontSize: number): void {
   const lineHeight = fontSize * 1.4;
   const bottomY = topY - Math.max(maxHeight, lineHeight);
-  const words = text.split(/\s+/);
   let line = '';
   let y = topY - fontSize;
 

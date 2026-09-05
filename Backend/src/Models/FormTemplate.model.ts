@@ -41,6 +41,7 @@ const FieldDefinitionSchema = new mongoose.Schema<FieldDefinition>(
     required: { type: Boolean, default: false },
     helpText: { type: String },
     ruledLineCount: { type: Number },
+    detectedRuleYPositions: { type: [Number] },
     gridCriteria: { type: [String] },
     gridOptions: { type: [String] },
     computeFrom: { type: [String] },

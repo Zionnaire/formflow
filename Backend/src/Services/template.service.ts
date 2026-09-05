@@ -5,8 +5,9 @@ import { logger } from '../Middlewares/logger.js';
 import { downloadAsset, uploadPageImage } from './cloudinary.service.js';
 import { extractFieldsFromPdf } from './groq.service.js';
 import { extractPositionedText } from './pdfText.service.js';
-import { renderAllPagesToPngs, RENDER_DPI } from './pdfRender.service.js';
-import type { FieldCoordinates, PageImage } from '../Types/index.js';
+import { renderAllPagesToPngs, RENDER_DPI, type RenderedPage } from './pdfRender.service.js';
+import { detectRuledLines } from './ruleDetection.service.js';
+import type { FieldCoordinates, FieldDefinition, PageImage } from '../Types/index.js';
 
 export async function listTemplates(search?: string): Promise<IFormTemplate[]> {
   const query = search ? { $text: { $search: search } } : {};
@@ -59,12 +60,13 @@ export async function extractAndCreateTemplate(
   const { sections, fields } = await extractFieldsFromPdf(items, pageCount, title);
 
   // Rasterize every page once, now, at upload time — the canonical visual reference the
-  // field-position editor and (eventually) ruled-line/rating-grid detection measure against,
-  // instead of each feature re-deriving its own notion of "the page" later. FieldDefinition
-  // coordinates stay fractions of page width/height exactly as before (resolution-independent by
-  // construction) — pageImages just resolves what a fraction points to in pixels, for anything
-  // that needs to draw on or analyze this specific image.
-  const pageImages = await rasterizeAndUploadPages(bytes, fileHash);
+  // field-position editor and ruled-line detection measure against, instead of each feature
+  // re-deriving its own notion of "the page" later. FieldDefinition coordinates stay fractions of
+  // page width/height exactly as before (resolution-independent by construction) — pageImages
+  // just resolves what a fraction points to in pixels, for anything that needs to draw on or
+  // analyze this specific image.
+  const { pageImages, rendered } = await rasterizeAndUploadPages(bytes, fileHash);
+  detectRuledLinesForFields(fields, rendered);
 
   const template = await FormTemplateModel.create({
     fileHash,
@@ -82,9 +84,9 @@ export async function extractAndCreateTemplate(
   return template;
 }
 
-async function rasterizeAndUploadPages(pdfBytes: Buffer, fileHash: string): Promise<PageImage[]> {
+async function rasterizeAndUploadPages(pdfBytes: Buffer, fileHash: string): Promise<{ pageImages: PageImage[]; rendered: RenderedPage[] }> {
   const rendered = await renderAllPagesToPngs(pdfBytes, RENDER_DPI);
-  return Promise.all(
+  const pageImages = await Promise.all(
     rendered.map(async (page) => {
       const upload = await uploadPageImage(page.buffer, 'page-images', `${fileHash}-p${page.page}`);
       // Cloudinary's own reported width/height, not the pre-upload viewport values — pdfjs
@@ -94,6 +96,29 @@ async function rasterizeAndUploadPages(pdfBytes: Buffer, fileHash: string): Prom
       return { page: page.page, cloudinaryPublicId: upload.publicId, width: upload.width ?? page.width, height: upload.height ?? page.height };
     }),
   );
+  return { pageImages, rendered };
+}
+
+/**
+ * Replaces AI-guessed `ruledLineCount` with real detected rule positions (Services/
+ * ruleDetection.service.ts) for every long_text_ruled field, scanning each field's own pixel
+ * region on its already-rendered page image — no extra rasterization pass needed, the buffers are
+ * already in hand from rasterizeAndUploadPages. Mutates `fields` in place.
+ */
+function detectRuledLinesForFields(fields: FieldDefinition[], rendered: RenderedPage[]): void {
+  for (const field of fields) {
+    if (field.type !== 'long_text_ruled') continue;
+    const page = rendered.find((p) => p.page === field.page);
+    if (!page) continue;
+
+    const detected = detectRuledLines(page.buffer, {
+      x: field.coordinates.x * page.width,
+      y: field.coordinates.y * page.height,
+      width: field.coordinates.width * page.width,
+      height: field.coordinates.height * page.height,
+    });
+    if (detected.length > 0) field.detectedRuleYPositions = detected;
+  }
 }
 
 /**
@@ -109,9 +134,12 @@ export async function getTemplatePagePreview(templateId: string, pageNumber: num
   let pageImages = template.pageImages;
   if (!pageImages || pageImages.length === 0) {
     const bytes = await downloadAsset(template.sourceCloudinaryId, 'raw');
-    pageImages = await rasterizeAndUploadPages(bytes, template.fileHash);
+    const rasterized = await rasterizeAndUploadPages(bytes, template.fileHash);
+    pageImages = rasterized.pageImages;
+    detectRuledLinesForFields(template.fieldSchema, rasterized.rendered);
     template.renderDPI = RENDER_DPI;
     template.pageImages = pageImages;
+    template.markModified('fieldSchema');
     await template.save();
     logger.info({ templateId, pages: pageImages.length }, 'Backfilled pageImages for a pre-existing template');
   }

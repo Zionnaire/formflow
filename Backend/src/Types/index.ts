@@ -55,6 +55,14 @@ export interface FieldDefinition {
   /** The instructional sentence(s) printed under a section/field heading in the source PDF (e.g. "Provide a brief overview of your internship…") — shown to the user as guidance, distinct from the short field label. */
   helpText?: string;
   ruledLineCount?: number;
+  /**
+   * Real printed ruled-line y positions on this field's page image, each as a fraction of page
+   * height in the same top-left-origin space as `coordinates.y` — detected by scanning pixels
+   * (Services/ruleDetection.service.ts), not guessed by the AI extraction pass. Only meaningful
+   * for `long_text_ruled` fields. Absent (or too short to be useful) means detection found no
+   * reliable rules for this field, and pdf.service.ts falls back to its lineHeight/masking logic.
+   */
+  detectedRuleYPositions?: number[];
   gridCriteria?: string[];
   gridOptions?: string[];
   computeFrom?: string[];
