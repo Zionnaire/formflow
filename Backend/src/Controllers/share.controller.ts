@@ -1,11 +1,22 @@
 import type { Request, Response } from 'express';
-import { createShare, buildShareUrl, getPublicShareView, submitShareSection } from '../Services/share.service.js';
+import {
+  createShare,
+  buildShareUrl,
+  getPublicShareView,
+  submitShareSection,
+  listSharesForSubmission,
+} from '../Services/share.service.js';
 import { createApiSuccess } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 
 export const createShareHandler = asyncHandler(async (req: Request, res: Response) => {
   const share = await createShare(req.params['id'] as string, req.user!.sub, req.body.sectionId, req.body.role);
   res.status(201).json(createApiSuccess({ share, url: buildShareUrl(share.token) }));
+});
+
+export const listSharesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const sections = await listSharesForSubmission(req.params['id'] as string, req.user!.sub);
+  res.json(createApiSuccess({ sections }));
 });
 
 export const resolveShareHandler = asyncHandler(async (req: Request, res: Response) => {

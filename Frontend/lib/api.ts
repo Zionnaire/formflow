@@ -63,6 +63,13 @@ export interface FormSectionDef {
   pageRange: [number, number];
 }
 
+export interface SectionShareStatus {
+  sectionId: string;
+  role: PartyRole;
+  hasActiveShare: boolean;
+  completedAt?: string;
+}
+
 export interface ApiFormTemplate {
   _id: string;
   title: string;
@@ -290,6 +297,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ sectionId, role }),
     }),
+
+  /** Real, server-persisted status per non-owner section — survives a reload, unlike a purely local "did I just click Get Link" flag. */
+  listShares: (submissionId: string) => request<{ sections: SectionShareStatus[] }>(`/submissions/${submissionId}/shares`),
 
   /** Public — no session cookie needed, the token itself is the access grant. */
   resolveShare: (token: string) => request<{ share: PublicShareView }>(`/fill/${token}`),

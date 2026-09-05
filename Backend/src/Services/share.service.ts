@@ -6,6 +6,7 @@ import { UserModel } from '../Models/User.model.js';
 import { ApiError } from '../Utils/errors.js';
 import { env } from '../config/env.js';
 import { logger } from '../Middlewares/logger.js';
+import { notifySectionCompleted } from './email.service.js';
 import type { PartyRole, FieldDefinition } from '../Types/index.js';
 
 export async function createShare(submissionId: string, ownerId: string, sectionId: string, role: PartyRole): Promise<IShare> {
@@ -29,6 +30,46 @@ export async function createShare(submissionId: string, ownerId: string, section
 
 export function buildShareUrl(token: string): string {
   return `${env.FRONTEND_URL}/fill/${token}`;
+}
+
+export interface SectionShareStatus {
+  sectionId: string;
+  role: PartyRole;
+  /** A share link exists, isn't expired, and hasn't been submitted yet. */
+  hasActiveShare: boolean;
+  /** Set once this section's data has actually been submitted (Submission.sections.get(sectionId).completedAt) — the source of truth for "is this section done", independent of whether its share link is still active. */
+  completedAt?: Date;
+}
+
+/**
+ * What ShareSectionsPanel needs to render real, persisted state instead of the local-only "did I
+ * just click Get Link in this browser tab" state it had before — every non-owner section's
+ * current share/completion status, so reloading the page (or a different device) still shows the
+ * right thing.
+ */
+export async function listSharesForSubmission(submissionId: string, ownerId: string): Promise<SectionShareStatus[]> {
+  const submission = await SubmissionModel.findOne({ _id: submissionId, ownerId });
+  if (!submission) throw new ApiError(404, 'Submission not found', 'NOT_FOUND');
+
+  const template = await FormTemplateModel.findById(submission.formTemplateId);
+  if (!template) throw new ApiError(404, 'Form template not found', 'NOT_FOUND');
+
+  const nonOwnerSections = template.sections.filter((s) => s.role !== 'owner');
+  const shares = await ShareModel.find({
+    submissionId: submission._id,
+    sectionId: { $in: nonOwnerSections.map((s) => s.sectionId) },
+  });
+
+  const now = new Date();
+  return nonOwnerSections.map((section) => {
+    const activeShare = shares.find((s) => s.sectionId === section.sectionId && !s.usedAt && s.expiresAt > now);
+    return {
+      sectionId: section.sectionId,
+      role: section.role,
+      hasActiveShare: Boolean(activeShare),
+      completedAt: submission.sections.get(section.sectionId)?.completedAt,
+    };
+  });
 }
 
 export async function resolveShare(token: string): Promise<IShare> {
@@ -93,4 +134,13 @@ export async function submitShareSection(token: string, data: Record<string, unk
   await share.save();
 
   logger.info({ shareId: share._id.toString(), sectionId: share.sectionId }, 'Shared section submitted');
+
+  const [template, owner] = await Promise.all([
+    FormTemplateModel.findById(submission.formTemplateId),
+    UserModel.findById(submission.ownerId),
+  ]);
+  const sectionLabel = template?.sections.find((s) => s.sectionId === share.sectionId)?.label ?? 'A section';
+  if (owner?.email && template) {
+    await notifySectionCompleted(owner.email, template.title, sectionLabel);
+  }
 }

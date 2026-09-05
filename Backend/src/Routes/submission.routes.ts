@@ -5,7 +5,7 @@ import {
   getSubmissionHandler,
   patchSectionHandler,
 } from '../Controllers/submission.controller.js';
-import { createShareHandler } from '../Controllers/share.controller.js';
+import { createShareHandler, listSharesHandler } from '../Controllers/share.controller.js';
 import {
   autoFillHandler,
   validateSubmissionHandler,
@@ -33,6 +33,7 @@ router.get('/', listSubmissionsHandler);
 router.get('/:id', getSubmissionHandler);
 router.patch('/:id/sections/:sectionId', validate(PatchSectionSchema), patchSectionHandler);
 router.post('/:id/share', validate(CreateShareSchema), createShareHandler);
+router.get('/:id/shares', listSharesHandler);
 router.post('/:id/auto-fill', aiPipelineRateLimiter, autoFillHandler);
 router.post('/:id/fields/:fieldId/suggest', aiPipelineRateLimiter, suggestFieldHandler);
 router.post('/:id/validate', validateSubmissionHandler);

@@ -61,20 +61,6 @@ function setSectionData(submission: ISubmission, sectionId: string, data: Record
   } as never);
 }
 
-/** Partial, resumable save — used for both manual edits and "save & continue later". */
-export async function patchSubmissionSection(
-  id: string,
-  ownerId: string,
-  sectionId: string,
-  data: Record<string, unknown>,
-): Promise<ISubmission> {
-  const submission = await getSubmissionForOwner(id, ownerId);
-  setSectionData(submission, sectionId, data);
-  submission.lastEditedAt = new Date();
-  await submission.save();
-  return submission;
-}
-
 async function getSubmissionWithTemplate(id: string, ownerId: string): Promise<{ submission: ISubmission; template: IFormTemplate }> {
   const submission = await getSubmissionForOwner(id, ownerId);
   const template = await FormTemplateModel.findById(submission.formTemplateId);
@@ -84,6 +70,30 @@ async function getSubmissionWithTemplate(id: string, ownerId: string): Promise<{
 
 function ownerSectionId(template: IFormTemplate): string {
   return template.sections.find((s) => s.role === 'owner')?.sectionId ?? template.sections[0]?.sectionId ?? 'owner';
+}
+
+/**
+ * Partial, resumable save — used for both manual edits and "save & continue later". Scoped to the
+ * template's own owner section: every other section (field_supervisor, university_supervisor,
+ * hod, multi, ...) is filled exclusively through that party's own share link
+ * (Services/share.service.ts submitShareSection), never through the student's own authenticated
+ * session — otherwise the student could silently write into the organization or school's part of
+ * the form, which defeats the point of having separate reviewers at all.
+ */
+export async function patchSubmissionSection(
+  id: string,
+  ownerId: string,
+  sectionId: string,
+  data: Record<string, unknown>,
+): Promise<ISubmission> {
+  const { submission, template } = await getSubmissionWithTemplate(id, ownerId);
+  if (sectionId !== ownerSectionId(template)) {
+    throw new ApiError(403, "You can only fill in your own section of this form — the rest is filled by whoever it's shared with", 'INSUFFICIENT_PERMISSIONS');
+  }
+  setSectionData(submission, sectionId, data);
+  submission.lastEditedAt = new Date();
+  await submission.save();
+  return submission;
 }
 
 /**
