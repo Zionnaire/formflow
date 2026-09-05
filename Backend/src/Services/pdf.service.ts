@@ -68,6 +68,26 @@ export function findMissingRequiredFields(template: IFormTemplate, submission: I
 }
 
 /**
+ * Draws text over an opaque white patch sized to it, instead of straight onto the page — the
+ * source PDF's own pre-printed ruled lines sit at a pitch we can only estimate (ruledLineCount is
+ * an AI guess, confirmed on a real form to be off by as much as 2x), so any fixed line spacing we
+ * pick can drift into a ruled line crossing through the middle of our text instead of sitting
+ * under it. Masking what's underneath first means that drift is merely invisible, not visible.
+ */
+function drawTextOpaque(page: PDFPage, text: string, x: number, y: number, size: number, font: PDFFont): void {
+  const width = font.widthOfTextAtSize(text, size);
+  const padding = size * 0.15;
+  page.drawRectangle({
+    x: x - padding,
+    y: y - size * 0.3,
+    width: width + padding * 2,
+    height: size * 1.2,
+    color: rgb(1, 1, 1),
+  });
+  page.drawText(text, { x, y, size, font, color: rgb(0.11, 0.11, 0.1) });
+}
+
+/**
  * Overlays filled values onto the original PDF using each field's fractional coordinates
  * (see Types/index.ts FieldCoordinates) converted to that page's actual point space.
  */
@@ -103,7 +123,7 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
       drawWrappedText(page, value, boxX, pageHeight - boxTopY, boxWidth || pageWidth - boxX, boxHeight, useFont, fontSize);
     } else {
       const drawY = pageHeight - boxTopY - fontSize;
-      page.drawText(value, { x: boxX, y: drawY, size: fontSize, font: useFont, color: rgb(0.11, 0.11, 0.1) });
+      drawTextOpaque(page, value, boxX, drawY, fontSize, useFont);
     }
   }
 
@@ -119,6 +139,11 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
  * (confirmed on a real form: a short comment still landed close to the field below it), so this
  * bounds how far a *long* draft can run on to make that failure mode strictly bounded rather than
  * unbounded, even though it can't correct a box that was mis-measured from the very first line.
+ *
+ * Deliberately doesn't try to match line spacing to the box's own pre-printed ruled lines —
+ * ruledLineCount is an AI guess (confirmed on a real form to be off by as much as 2x) and can't
+ * be trusted for that. drawTextOpaque masks whatever's underneath each line instead, so a
+ * mismatched rule can no longer show through the middle of the text.
  */
 function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, maxWidth: number, maxHeight: number, font: PDFFont, fontSize: number): void {
   const lineHeight = fontSize * 1.4;
@@ -131,7 +156,7 @@ function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, m
     if (y < bottomY) return;
     const candidate = line ? `${line} ${word}` : word;
     if (line && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
-      page.drawText(line, { x, y, size: fontSize, font, color: rgb(0.11, 0.11, 0.1) });
+      drawTextOpaque(page, line, x, y, fontSize, font);
       line = word;
       y -= lineHeight;
     } else {
@@ -139,7 +164,7 @@ function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, m
     }
   }
   if (line && y >= bottomY) {
-    page.drawText(line, { x, y, size: fontSize, font, color: rgb(0.11, 0.11, 0.1) });
+    drawTextOpaque(page, line, x, y, fontSize, font);
   }
 }
 
