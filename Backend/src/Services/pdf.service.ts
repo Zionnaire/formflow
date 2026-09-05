@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { IFormTemplate } from '../Models/FormTemplate.model.js';
 import type { ISubmission } from '../Models/Submission.model.js';
+import { extractPositionedText, type PositionedText } from './pdfText.service.js';
 
 export interface MissingField {
   id: string;
@@ -79,9 +80,13 @@ function drawTextOpaque(page: PDFPage, text: string, x: number, y: number, size:
   const padding = size * 0.15;
   page.drawRectangle({
     x: x - padding,
-    y: y - size * 0.3,
+    // Sized to the *assumed* lineHeight (fontSize * 1.4, see drawWrappedText), not just this
+    // line's own ink extents — a mask sized only to the glyph height left enough margin that a
+    // real printed rule could still show through near a line's descenders on longer wrapped
+    // answers, confirmed on the real form's longest Section A responses.
+    y: y - size * 0.5,
     width: width + padding * 2,
-    height: size * 1.2,
+    height: size * 1.6,
     color: rgb(1, 1, 1),
   });
   page.drawText(text, { x, y, size, font, color: rgb(0.11, 0.11, 0.1) });
@@ -97,6 +102,13 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
   const signatureFont = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
   const data = collectSubmissionData(submission);
   const pages = pdfDoc.getPages();
+
+  // Only parsed when the template actually has a rating_grid field (most forms don't) — a second
+  // full-document text-extraction pass, used to anchor each criterion row to its real printed
+  // position instead of assuming the extracted box evenly spans exactly criteria.length rows.
+  // Confirmed on the real reference form that assumption is false (see drawRatingGrid).
+  const hasRatingGrid = template.fieldSchema.some((f) => f.type === 'rating_grid');
+  const sourceText = hasRatingGrid ? (await extractPositionedText(originalBytes)).items : [];
 
   for (const field of template.fieldSchema) {
     const rawValue = data[field.id];
@@ -118,7 +130,20 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
     const fontSize = Math.min(targetSize, Math.max(8, boxHeight * 0.7 || targetSize));
 
     if (field.type === 'rating_grid') {
-      drawRatingGrid(page, value, field.gridCriteria ?? [], field.gridOptions ?? [], boxX, pageHeight - boxTopY, boxWidth, boxHeight, font);
+      drawRatingGrid(
+        page,
+        value,
+        field.gridCriteria ?? [],
+        field.gridOptions ?? [],
+        boxX,
+        pageHeight - boxTopY,
+        boxWidth,
+        boxHeight,
+        font,
+        sourceText,
+        field.page,
+        field.coordinates,
+      );
     } else if (field.type === 'long_text_ruled') {
       drawWrappedText(page, value, boxX, pageHeight - boxTopY, boxWidth || pageWidth - boxX, boxHeight, useFont, fontSize);
     } else {
@@ -169,12 +194,64 @@ function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, m
 }
 
 /**
+ * Finds each criterion's real vertical position on the source page by matching it against the
+ * page's own extracted text runs, instead of assuming the extracted box evenly spans exactly
+ * criteria.length rows. Verified false on the real reference form: the `evaluation` field's box
+ * (coordinates.y=0.25, height=0.3) measured against the page's actual text runs spans only six
+ * real print-rows for seven criteria — "Attendance and punctuality"'s real text sits at y=0.2352,
+ * *above* the box's own top edge (0.25) entirely. That's not a fixed off-by-one (a header row
+ * wrongly included, say) that a divisor tweak could correct — it's a per-extraction sizing error,
+ * and dividing box height by any constant can't place a mark for a row whose real content is
+ * outside the box's bounds. Matching against real text sidesteps the box's vertical bounds for
+ * row placement altogether; a criterion that fails to match (e.g. OCR-mangled text) falls back
+ * to evenly dividing the field's own declared box, same as the old behavior, scoped to just that
+ * row.
+ *
+ * Deliberately doesn't filter candidates by x — tried anchoring to the field's own x first and
+ * verified it fails on a second real rating_grid on the same form (`assessment_grid`): its box is
+ * anchored to the score column (x=0.25), while the criteria labels it names actually print in
+ * their own column well to the left (x=0.126, outside any reasonable margin around the box's own
+ * x). The box's x/width describe where its *answer* area is, not reliably where its row labels
+ * are, so label column position can't be assumed from the field's own coordinates at all — a
+ * generous page-relative y-window plus the text match's own specificity is what actually scopes
+ * candidates correctly for both shapes of table.
+ */
+function resolveCriterionRowsY(
+  criteria: string[],
+  sourceText: PositionedText[],
+  pageNumber: number,
+  fieldTopY: number,
+  fieldHeight: number,
+): number[] {
+  const candidates = sourceText
+    .filter((item) => item.page === pageNumber && item.y >= fieldTopY - 0.12 && item.y <= fieldTopY + fieldHeight + 0.15)
+    .sort((a, b) => a.y - b.y);
+
+  const used = new Set<PositionedText>();
+
+  return criteria.map((criterion, index) => {
+    const normalized = criterion.trim().toLowerCase();
+    const match = candidates.find((item) => {
+      if (used.has(item)) return false;
+      const itemText = item.text.trim().toLowerCase();
+      // A criterion that wraps onto a second printed line is still two separate text runs —
+      // matching on "one is a prefix of the other" catches both a whole-line match and just the
+      // first fragment of a wrapped one.
+      return itemText.length > 0 && (normalized.startsWith(itemText) || itemText.startsWith(normalized));
+    });
+    if (match) {
+      used.add(match);
+      return match.y;
+    }
+    return fieldTopY + (index + 0.5) * (fieldHeight / criteria.length);
+  });
+}
+
+/**
  * Renders a rating_grid by marking the selected cell in each row, rather than dumping the
- * field's raw JSON value as text. The extracted schema only gives one bounding box for the whole
- * table (no per-cell coordinates), so cell positions are a uniform-grid approximation: the box is
- * assumed to span a label column plus one column per option, evenly divided, and one row per
- * criterion, evenly divided — close enough to land in the right cell for the typical evenly
- * spaced tables these forms use, without repeating text the form has already printed.
+ * field's raw JSON value as text. Column positions are a uniform-grid approximation — the box is
+ * assumed to span a label column plus one column per option, evenly divided — verified against
+ * the real reference form to already land correctly (unlike rows, see resolveCriterionRowsY).
  */
 function drawRatingGrid(
   page: PDFPage,
@@ -186,6 +263,9 @@ function drawRatingGrid(
   boxWidth: number,
   boxHeight: number,
   font: PDFFont,
+  sourceText: PositionedText[],
+  pageNumber: number,
+  fieldCoordinates: { x: number; y: number; height: number },
 ): void {
   if (criteria.length === 0 || options.length === 0) return;
   let selections: Record<string, unknown>;
@@ -195,9 +275,11 @@ function drawRatingGrid(
     return;
   }
 
+  const { height: pageHeight } = page.getSize();
   const colWidth = boxWidth / (options.length + 1); // +1 for the criteria-label column
-  const rowHeight = boxHeight / criteria.length;
-  const markSize = Math.min(rowHeight, colWidth) * 0.5;
+  const markSize = Math.min(boxHeight / criteria.length, colWidth) * 0.5;
+
+  const rowsYFraction = resolveCriterionRowsY(criteria, sourceText, pageNumber, fieldCoordinates.y, fieldCoordinates.height);
 
   criteria.forEach((criterion, row) => {
     const selected = selections[criterion];
@@ -206,7 +288,7 @@ function drawRatingGrid(
     if (col === -1) return;
 
     const cellCenterX = boxX + (col + 1.5) * colWidth;
-    const cellCenterY = boxTopY - (row + 0.5) * rowHeight;
+    const cellCenterY = pageHeight - rowsYFraction[row]! * pageHeight;
     // drawText anchors at the text baseline, not its visual center — an "X" drawn at
     // cellCenterY would sit with its baseline there and its glyph extending upward, reading as
     // shifted a half-row too high. Offset by half the glyph's actual width/cap-height instead.
