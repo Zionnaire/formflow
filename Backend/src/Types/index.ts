@@ -67,6 +67,22 @@ export interface FormSection {
   pageRange: [number, number];
 }
 
+/**
+ * One page of a template's source PDF, rasterized once at upload time and cached in Cloudinary —
+ * the canonical visual reference every geometry-dependent feature (the field-position editor,
+ * ruled-line detection) measures against, instead of each one re-deriving its own notion of "the
+ * page" from the live PDF. FieldDefinition.coordinates stays a fraction of page width/height
+ * exactly as before (resolution-independent by construction), so nothing that already consumes
+ * it needs to change — width/height here just resolve what a fraction actually points to in
+ * pixels for anything that needs to draw on or analyze this specific image.
+ */
+export interface PageImage {
+  page: number;
+  cloudinaryPublicId: string;
+  width: number;
+  height: number;
+}
+
 export interface ApiSuccess<T> {
   success: true;
   data: T;

@@ -1,5 +1,5 @@
 import mongoose, { type Document, type Model } from 'mongoose';
-import type { FieldDefinition, FormSection } from '../Types/index.js';
+import type { FieldDefinition, FormSection, PageImage } from '../Types/index.js';
 
 export interface IFormTemplate extends Document {
   _id: mongoose.Types.ObjectId;
@@ -13,6 +13,9 @@ export interface IFormTemplate extends Document {
   institution?: string;
   fieldSchema: FieldDefinition[];
   sections: FormSection[];
+  /** The one number that defines every pageImages entry's pixel-to-PDF-point conversion (points = pixels * 72 / renderDPI) — absent on templates created before this feature (see template.service.ts's lazy backfill). */
+  renderDPI?: number;
+  pageImages?: PageImage[];
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -59,6 +62,16 @@ const FormSectionSchema = new mongoose.Schema<FormSection>(
   { _id: false },
 );
 
+const PageImageSchema = new mongoose.Schema<PageImage>(
+  {
+    page: { type: Number, required: true },
+    cloudinaryPublicId: { type: String, required: true },
+    width: { type: Number, required: true },
+    height: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
 const FormTemplateSchema = new mongoose.Schema<IFormTemplate>(
   {
     fileHash: { type: String, required: true, unique: true },
@@ -71,6 +84,8 @@ const FormTemplateSchema = new mongoose.Schema<IFormTemplate>(
     institution: { type: String, trim: true },
     fieldSchema: { type: [FieldDefinitionSchema], default: [] },
     sections: { type: [FormSectionSchema], default: [] },
+    renderDPI: { type: Number },
+    pageImages: { type: [PageImageSchema] },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },

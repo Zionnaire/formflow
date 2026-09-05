@@ -48,6 +48,33 @@ export async function uploadImage(
   });
 }
 
+/**
+ * Rasterized template pages — stored as authenticated image assets with no resizing
+ * transformation, unlike uploadImage's profile-photo path. A page rendered at pdfRender.service's
+ * RENDER_DPI is the canonical reference every geometry-dependent feature measures pixel
+ * coordinates against; silently downscaling it against the 1200px default meant for profile
+ * photos would quietly invalidate that math for any page taller than that.
+ */
+export async function uploadPageImage(fileBuffer: Buffer, folder: string, publicId: string): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: `formflow/${folder}`, resource_type: 'image', type: 'authenticated', public_id: publicId },
+      (error, result) => {
+        if (error || !result) return reject(error ?? new Error('Upload failed'));
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          format: result.format,
+          bytes: result.bytes,
+          width: result.width,
+          height: result.height,
+        });
+      },
+    );
+    uploadStream.end(fileBuffer);
+  });
+}
+
 /** Source PDFs and generated, filled PDFs — stored as authenticated raw assets. */
 export async function uploadDocument(fileBuffer: Buffer, folder: string, originalName: string): Promise<UploadResult> {
   return new Promise((resolve, reject) => {

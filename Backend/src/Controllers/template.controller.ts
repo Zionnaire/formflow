@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { listTemplates, getTemplateById } from '../Services/template.service.js';
+import { listTemplates, getTemplateById, getTemplatePagePreview, updateFieldCoordinates } from '../Services/template.service.js';
 import { createApiSuccess } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 
@@ -11,5 +11,23 @@ export const listTemplatesHandler = asyncHandler(async (req: Request, res: Respo
 
 export const getTemplateHandler = asyncHandler(async (req: Request, res: Response) => {
   const template = await getTemplateById(req.params['id'] as string);
+  res.json(createApiSuccess({ template }));
+});
+
+export const getTemplatePagePreviewHandler = asyncHandler(async (req: Request, res: Response) => {
+  const pageNumber = Number(req.params['pageNumber']);
+  const png = await getTemplatePagePreview(req.params['id'] as string, pageNumber);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(png);
+});
+
+export const updateFieldCoordinatesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const template = await updateFieldCoordinates(
+    req.params['id'] as string,
+    req.params['fieldId'] as string,
+    req.user!.sub,
+    req.body.coordinates,
+  );
   res.json(createApiSuccess({ template }));
 });
