@@ -97,8 +97,10 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
     const targetSize = isSignature ? 18 : 11;
     const fontSize = Math.min(targetSize, Math.max(8, boxHeight * 0.7 || targetSize));
 
-    if (field.type === 'long_text_ruled') {
-      drawWrappedText(page, value, boxX, pageHeight - boxTopY, boxWidth || pageWidth - boxX, useFont, fontSize);
+    if (field.type === 'rating_grid') {
+      drawRatingGrid(page, value, field.gridCriteria ?? [], field.gridOptions ?? [], boxX, pageHeight - boxTopY, boxWidth, boxHeight, font);
+    } else if (field.type === 'long_text_ruled') {
+      drawWrappedText(page, value, boxX, pageHeight - boxTopY, boxWidth || pageWidth - boxX, boxHeight, useFont, fontSize);
     } else {
       const drawY = pageHeight - boxTopY - fontSize;
       page.drawText(value, { x: boxX, y: drawY, size: fontSize, font: useFont, color: rgb(0.11, 0.11, 0.1) });
@@ -111,13 +113,22 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
   return pdfDoc.save({ useObjectStreams: false });
 }
 
-function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, maxWidth: number, font: PDFFont, fontSize: number): void {
+/**
+ * Wraps text to maxWidth and stops once it would run past maxHeight — an extraction-estimated
+ * box is sometimes taller than the space really available before the next field's own label
+ * (confirmed on a real form: a short comment still landed close to the field below it), so this
+ * bounds how far a *long* draft can run on to make that failure mode strictly bounded rather than
+ * unbounded, even though it can't correct a box that was mis-measured from the very first line.
+ */
+function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, maxWidth: number, maxHeight: number, font: PDFFont, fontSize: number): void {
   const lineHeight = fontSize * 1.4;
+  const bottomY = topY - Math.max(maxHeight, lineHeight);
   const words = text.split(/\s+/);
   let line = '';
   let y = topY - fontSize;
 
   for (const word of words) {
+    if (y < bottomY) return;
     const candidate = line ? `${line} ${word}` : word;
     if (line && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
       page.drawText(line, { x, y, size: fontSize, font, color: rgb(0.11, 0.11, 0.1) });
@@ -127,7 +138,62 @@ function drawWrappedText(page: PDFPage, text: string, x: number, topY: number, m
       line = candidate;
     }
   }
-  if (line) {
+  if (line && y >= bottomY) {
     page.drawText(line, { x, y, size: fontSize, font, color: rgb(0.11, 0.11, 0.1) });
   }
+}
+
+/**
+ * Renders a rating_grid by marking the selected cell in each row, rather than dumping the
+ * field's raw JSON value as text. The extracted schema only gives one bounding box for the whole
+ * table (no per-cell coordinates), so cell positions are a uniform-grid approximation: the box is
+ * assumed to span a label column plus one column per option, evenly divided, and one row per
+ * criterion, evenly divided — close enough to land in the right cell for the typical evenly
+ * spaced tables these forms use, without repeating text the form has already printed.
+ */
+function drawRatingGrid(
+  page: PDFPage,
+  rawValue: string,
+  criteria: string[],
+  options: string[],
+  boxX: number,
+  boxTopY: number,
+  boxWidth: number,
+  boxHeight: number,
+  font: PDFFont,
+): void {
+  if (criteria.length === 0 || options.length === 0) return;
+  let selections: Record<string, unknown>;
+  try {
+    selections = JSON.parse(rawValue) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const colWidth = boxWidth / (options.length + 1); // +1 for the criteria-label column
+  const rowHeight = boxHeight / criteria.length;
+  const markSize = Math.min(rowHeight, colWidth) * 0.5;
+
+  criteria.forEach((criterion, row) => {
+    const selected = selections[criterion];
+    if (typeof selected !== 'string' || !selected.trim()) return;
+    const col = options.findIndex((opt) => opt.toLowerCase() === selected.toLowerCase());
+    if (col === -1) return;
+
+    const cellCenterX = boxX + (col + 1.5) * colWidth;
+    const cellCenterY = boxTopY - (row + 0.5) * rowHeight;
+    // drawText anchors at the text baseline, not its visual center — an "X" drawn at
+    // cellCenterY would sit with its baseline there and its glyph extending upward, reading as
+    // shifted a half-row too high. Offset by half the glyph's actual width/cap-height instead.
+    const markFontSize = markSize * 1.5;
+    const textWidth = font.widthOfTextAtSize('X', markFontSize);
+    const capHeight = markFontSize * 0.72; // approx Helvetica cap height
+    page.drawText('X', {
+      x: cellCenterX - textWidth / 2,
+      y: cellCenterY - capHeight / 2,
+      size: markFontSize,
+      font,
+      color: rgb(0.11, 0.11, 0.1),
+    });
+  });
 }

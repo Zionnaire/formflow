@@ -24,6 +24,8 @@ Field type vocabulary — classify every fillable area as exactly one of:
 - "checkbox": a single yes/no toggle box.
 - "rating_grid": a table with criteria rows and rating columns (e.g. Excellent/Very Good/Good/Fair/Poor)
   — one field per table, with gridCriteria = the row labels and gridOptions = the column labels.
+  List gridCriteria in the exact top-to-bottom order the rows appear on the page — the renderer
+  marks each row's selected column by position, so a reordered row gets the wrong row marked.
 - "long_text_ruled": a block of consecutive ruled/blank lines meant for handwritten paragraphs
   under a heading — set ruledLineCount to roughly how many ruled lines are in the block. If there
   is instructional text printed just under the heading (e.g. "Provide a brief overview of your
