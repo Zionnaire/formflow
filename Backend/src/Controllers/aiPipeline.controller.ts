@@ -7,7 +7,13 @@
  */
 import type { Request, Response } from 'express';
 import { extractAndCreateTemplate } from '../Services/template.service.js';
-import { autoFillSubmission, validateSubmission, generateSubmissionPdf, suggestFieldValue } from '../Services/submission.service.js';
+import {
+  autoFillSubmission,
+  validateSubmission,
+  generateSubmissionPdf,
+  downloadGeneratedPdf,
+  suggestFieldValue,
+} from '../Services/submission.service.js';
 import { createApiSuccess } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 
@@ -35,4 +41,11 @@ export const generatePdfHandler = asyncHandler(async (req: Request, res: Respons
 export const suggestFieldHandler = asyncHandler(async (req: Request, res: Response) => {
   const value = await suggestFieldValue(req.params['id'] as string, req.user!.sub, req.params['fieldId'] as string);
   res.json(createApiSuccess({ value }));
+});
+
+export const downloadPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { bytes, filename } = await downloadGeneratedPdf(req.params['id'] as string, req.user!.sub);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.send(bytes);
 });

@@ -23,6 +23,8 @@ export interface ISubmission extends Document {
   status: SubmissionStatus;
   sections: mongoose.Types.Map<SubmissionSection>;
   generatedPdfUrl?: string;
+  /** Cloudinary public_id of the generated PDF — used by /download to re-fetch bytes server-side, since Cloudinary's raw+authenticated delivery can't reliably serve a signed URL with a real .pdf extension on it (a dot in the public_id gets parsed as a delivery format and breaks the signature). */
+  generatedPdfPublicId?: string;
   lastEditedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -55,6 +57,7 @@ const SubmissionSchema = new mongoose.Schema<ISubmission>(
     status: { type: String, enum: ['draft', 'awaiting_others', 'complete'], default: 'draft' },
     sections: { type: Map, of: SubmissionSectionSchema, default: {} },
     generatedPdfUrl: { type: String },
+    generatedPdfPublicId: { type: String },
     lastEditedAt: { type: Date, default: Date.now },
   },
   { timestamps: true },

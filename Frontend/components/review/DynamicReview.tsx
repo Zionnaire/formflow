@@ -11,7 +11,7 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
   const [submission, setSubmission] = useState<ApiSubmission | null>(null);
   const [title, setTitle] = useState('');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [hasGeneratedPdf, setHasGeneratedPdf] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
         if (cancelled) return;
         setSubmission(submission);
         setValidation(validationResult);
-        if (submission.generatedPdfUrl) setDownloadUrl(submission.generatedPdfUrl);
+        if (submission.generatedPdfUrl) setHasGeneratedPdf(true);
 
         const templateId = typeof submission.formTemplateId === 'string' ? submission.formTemplateId : submission.formTemplateId._id;
         const { template } = await api.getTemplate(templateId);
@@ -48,7 +48,7 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
     setError(null);
     try {
       const result = await api.generateSubmission(submissionId);
-      setDownloadUrl(result.downloadUrl);
+      setHasGeneratedPdf(true);
       setValidation({ complete: result.missingFields.length === 0, missingFields: result.missingFields });
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Could not generate the PDF.');
@@ -110,7 +110,7 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter w-full max-w-5xl">
-        <DocumentPreview pdfUrl={downloadUrl ?? undefined} />
+        <DocumentPreview pdfUrl={hasGeneratedPdf ? api.getDownloadUrl(submissionId) : undefined} />
 
         <div className="lg:col-span-4 flex flex-col gap-md">
           <div className="bg-surface-container-lowest rounded-lg shadow-card p-md flex flex-col gap-md border border-surface-dim/30">
@@ -124,8 +124,8 @@ export function DynamicReview({ submissionId }: { submissionId: string }) {
               </div>
             </div>
 
-            {downloadUrl ? (
-              <a href={downloadUrl} target="_blank" rel="noreferrer">
+            {hasGeneratedPdf ? (
+              <a href={api.getDownloadUrl(submissionId)} target="_blank" rel="noreferrer">
                 <Button variant="primary" className="w-full rounded-full shadow-card">
                   <Icon name="download" filled />
                   Download Filled PDF

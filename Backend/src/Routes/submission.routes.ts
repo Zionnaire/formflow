@@ -6,7 +6,13 @@ import {
   patchSectionHandler,
 } from '../Controllers/submission.controller.js';
 import { createShareHandler } from '../Controllers/share.controller.js';
-import { autoFillHandler, validateSubmissionHandler, generatePdfHandler, suggestFieldHandler } from '../Controllers/aiPipeline.controller.js';
+import {
+  autoFillHandler,
+  validateSubmissionHandler,
+  generatePdfHandler,
+  suggestFieldHandler,
+  downloadPdfHandler,
+} from '../Controllers/aiPipeline.controller.js';
 import { authenticate } from '../Middlewares/auth.js';
 import { validate } from '../Middlewares/validate.js';
 import { aiPipelineRateLimiter } from '../Middlewares/rateLimiter.js';
@@ -25,5 +31,6 @@ router.post('/:id/auto-fill', aiPipelineRateLimiter, autoFillHandler);
 router.post('/:id/fields/:fieldId/suggest', aiPipelineRateLimiter, suggestFieldHandler);
 router.post('/:id/validate', validateSubmissionHandler);
 router.post('/:id/generate', aiPipelineRateLimiter, generatePdfHandler);
+router.get('/:id/download', downloadPdfHandler);
 
 export { router as submissionRouter };

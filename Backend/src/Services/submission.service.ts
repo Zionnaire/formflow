@@ -166,6 +166,7 @@ export async function validateSubmission(id: string, ownerId: string): Promise<V
 
 export interface GenerateResult {
   submission: ISubmission;
+  /** Relative API path — the frontend prepends its own API base to build the actual href. */
   downloadUrl: string;
   missingFields: MissingField[];
 }
@@ -177,14 +178,30 @@ export async function generateSubmissionPdf(id: string, ownerId: string): Promis
   const originalBytes = await downloadAsset(template.sourceCloudinaryId, 'raw');
   const filledBytes = await fillPdf(originalBytes, template, submission);
   const upload = await uploadDocument(Buffer.from(filledBytes), 'generated', `${submission._id.toString()}-filled`);
-  const downloadUrl = getSignedUrl(upload.publicId, 'raw');
 
   const missingFields = findMissingRequiredFields(template, submission);
-  submission.generatedPdfUrl = downloadUrl;
+  submission.generatedPdfUrl = getSignedUrl(upload.publicId, 'raw');
+  submission.generatedPdfPublicId = upload.publicId;
   submission.status = missingFields.length === 0 ? 'complete' : 'draft';
   submission.lastEditedAt = new Date();
   await submission.save();
 
   logger.info({ submissionId: id, missing: missingFields.length }, 'Submission PDF generated');
-  return { submission, downloadUrl, missingFields };
+  return { submission, downloadUrl: `/submissions/${submission._id.toString()}/download`, missingFields };
+}
+
+/**
+ * Re-fetches the generated PDF's bytes so the API can serve them itself with an explicit
+ * application/pdf content type and a friendly filename — Cloudinary's raw+authenticated delivery
+ * can't reliably serve a signed URL that ends in a real .pdf extension (a dot in the public_id
+ * gets parsed as a delivery format and invalidates the signature), so browsers linked straight to
+ * a Cloudinary URL had no way to tell it was a PDF and force-downloaded an extensionless file.
+ */
+export async function downloadGeneratedPdf(id: string, ownerId: string): Promise<{ bytes: Buffer; filename: string }> {
+  const { submission, template } = await getSubmissionWithTemplate(id, ownerId);
+  if (!submission.generatedPdfPublicId) throw new ApiError(404, 'This submission has no generated PDF yet', 'NOT_FOUND');
+
+  const bytes = await downloadAsset(submission.generatedPdfPublicId, 'raw');
+  const safeTitle = template.title.replace(/[^\w -]+/g, '').trim();
+  return { bytes, filename: `${safeTitle || 'form'}.pdf` };
 }

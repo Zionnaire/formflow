@@ -251,6 +251,15 @@ export const api = {
       { method: 'POST' },
     ),
 
+  /**
+   * The API streams the generated PDF itself (with a real application/pdf content type and a
+   * friendly filename) rather than handing back a direct Cloudinary link — Cloudinary's
+   * raw+authenticated delivery can't reliably serve a signed URL ending in a real .pdf extension,
+   * so a direct link left browsers unable to tell it was a PDF and force-downloaded it instead of
+   * previewing it.
+   */
+  getDownloadUrl: (submissionId: string) => `${API_URL}/submissions/${submissionId}/download`,
+
   // ── Shared-fill links (multi-party sections — brief section 7.3) ──────────
   createShare: (submissionId: string, sectionId: string, role: PartyRole) =>
     request<{ share: { token: string }; url: string }>(`/submissions/${submissionId}/share`, {
