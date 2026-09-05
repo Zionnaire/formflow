@@ -150,12 +150,21 @@ export async function getTemplatePagePreview(templateId: string, pageNumber: num
 }
 
 /**
+ * Anyone actively filling this form can improve it for the next person, but a stranger who's
+ * never touched it can't — same scoping rule for every field-position-editor write.
+ */
+async function assertCanEditTemplate(template: IFormTemplate, userId: string): Promise<void> {
+  const isCreator = template.createdBy?.toString() === userId;
+  const hasUsedTemplate = isCreator || (await SubmissionModel.exists({ formTemplateId: template._id, ownerId: userId }));
+  if (!hasUsedTemplate) {
+    throw new ApiError(403, "You need to have used this form before you can adjust its field positions", 'INSUFFICIENT_PERMISSIONS');
+  }
+}
+
+/**
  * Lets a student drag a misplaced field's box into the right spot instead of that needing an
  * engineering fix — the correction is saved on the template itself, so it's fixed for everyone
  * who fills out this same form from here on, not just the one submission that surfaced it.
- *
- * Scoped to users who have actually used this template (or created it) — anyone actively filling
- * this form can improve it for the next person, but a stranger who's never touched it can't.
  */
 export async function updateFieldCoordinates(
   templateId: string,
@@ -164,12 +173,7 @@ export async function updateFieldCoordinates(
   coordinates: FieldCoordinates,
 ): Promise<IFormTemplate> {
   const template = await getTemplateById(templateId);
-
-  const isCreator = template.createdBy?.toString() === userId;
-  const hasUsedTemplate = isCreator || (await SubmissionModel.exists({ formTemplateId: template._id, ownerId: userId }));
-  if (!hasUsedTemplate) {
-    throw new ApiError(403, "You need to have used this form before you can adjust its field positions", 'INSUFFICIENT_PERMISSIONS');
-  }
+  await assertCanEditTemplate(template, userId);
 
   const field = template.fieldSchema.find((f) => f.id === fieldId);
   if (!field) throw new ApiError(404, 'Field not found on this template', 'NOT_FOUND');
@@ -179,5 +183,40 @@ export async function updateFieldCoordinates(
   await template.save();
 
   logger.info({ templateId, fieldId, userId }, 'Field position adjusted');
+  return template;
+}
+
+/**
+ * Lets a person correct one rating_grid cell's exact mark position by clicking/dragging it in the
+ * field-position editor, instead of trusting the uniform-column / text-anchored-row computation
+ * every fillPdf call otherwise falls back to (see pdf.service.ts drawRatingGrid) — a per-cell
+ * escape hatch for whichever cells the automatic placement still gets wrong, rather than an
+ * all-or-nothing box like every other field type gets.
+ */
+export async function updateGridCellOverride(
+  templateId: string,
+  fieldId: string,
+  userId: string,
+  criterion: string,
+  option: string,
+  coordinates: { x: number; y: number },
+): Promise<IFormTemplate> {
+  const template = await getTemplateById(templateId);
+  await assertCanEditTemplate(template, userId);
+
+  const field = template.fieldSchema.find((f) => f.id === fieldId);
+  if (!field) throw new ApiError(404, 'Field not found on this template', 'NOT_FOUND');
+  if (field.type !== 'rating_grid') throw new ApiError(422, 'This field is not a rating grid', 'VALIDATION_ERROR');
+  if (!field.gridCriteria?.includes(criterion) || !field.gridOptions?.includes(option)) {
+    throw new ApiError(404, 'That criterion/option pair is not part of this rating grid', 'NOT_FOUND');
+  }
+
+  field.gridCellOverrides ??= {};
+  field.gridCellOverrides[criterion] ??= {};
+  field.gridCellOverrides[criterion]![option] = coordinates;
+  template.markModified('fieldSchema');
+  await template.save();
+
+  logger.info({ templateId, fieldId, userId, criterion, option }, 'Rating grid cell position corrected');
   return template;
 }

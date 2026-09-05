@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { api, ApiRequestError, type ApiFormTemplate, type FieldDefinition } from '@/lib/api';
 
 type Coordinates = FieldDefinition['coordinates'];
+type CellCoord = { x: number; y: number };
 
 function clampOffset(v: number): number {
   return Math.min(1.3, Math.max(-0.2, v));
@@ -15,6 +16,19 @@ function clampOffset(v: number): number {
 
 function clampSize(v: number): number {
   return Math.min(1.4, Math.max(0.005, v));
+}
+
+/** Same uniform-division fallback pdf.service.ts's drawRatingGrid computes server-side, so an
+ * uncorrected cell marker starts out exactly where the generated PDF would actually mark it. */
+function defaultCellCenter(field: FieldDefinition, criterionIndex: number, optionIndex: number): CellCoord {
+  const criteriaCount = field.gridCriteria?.length ?? 1;
+  const optionsCount = field.gridOptions?.length ?? 1;
+  const colWidth = field.coordinates.width / (optionsCount + 1); // +1 for the criteria-label column
+  const rowHeight = field.coordinates.height / criteriaCount;
+  return {
+    x: field.coordinates.x + (optionIndex + 1.5) * colWidth,
+    y: field.coordinates.y + (criterionIndex + 0.5) * rowHeight,
+  };
 }
 
 /**
@@ -27,6 +41,7 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
   const [template, setTemplate] = useState<ApiFormTemplate | null>(null);
   const [page, setPage] = useState(1);
   const [coords, setCoords] = useState<Record<string, Coordinates>>({});
+  const [gridOverrides, setGridOverrides] = useState<Record<string, Record<string, Record<string, CellCoord>>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -43,6 +58,11 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
         if (cancelled) return;
         setTemplate(template);
         setCoords(Object.fromEntries(template.fieldSchema.map((f) => [f.id, f.coordinates])));
+        setGridOverrides(
+          Object.fromEntries(
+            template.fieldSchema.filter((f) => f.type === 'rating_grid').map((f) => [f.id, f.gridCellOverrides ?? {}]),
+          ),
+        );
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiRequestError ? err.message : 'Could not load this form.');
       } finally {
@@ -78,6 +98,8 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
 
   const pageImage = template.pageImages?.find((p) => p.page === page);
   const pageFields = template.fieldSchema.filter((f) => f.page === page);
+  const selectedField = pageFields.find((f) => f.id === selectedId);
+  const selectedIsRatingGrid = selectedField?.type === 'rating_grid' && !!selectedField.gridCriteria?.length && !!selectedField.gridOptions?.length;
 
   async function persist(fieldId: string, next: Coordinates) {
     setSavingId(fieldId);
@@ -123,6 +145,52 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
     window.addEventListener('pointerup', onUp);
   }
 
+  function getCellCenter(field: FieldDefinition, criterion: string, option: string, criterionIndex: number, optionIndex: number): CellCoord {
+    return gridOverrides[field.id]?.[criterion]?.[option] ?? defaultCellCenter(field, criterionIndex, optionIndex);
+  }
+
+  async function persistGridCell(fieldId: string, criterion: string, option: string, next: CellCoord) {
+    setSavingId(fieldId);
+    setError(null);
+    try {
+      await api.updateGridCellOverride(template!._id, fieldId, criterion, option, next);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Could not save this cell position.');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  function startGridCellDrag(fieldId: string, criterion: string, option: string, initial: CellCoord, e: ReactPointerEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const container = containerRef.current;
+    if (!container) return;
+    const start: CellCoord = initial;
+
+    const rect = container.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let latest: CellCoord = start;
+
+    function onMove(ev: PointerEvent) {
+      const dxFrac = (ev.clientX - startX) / rect.width;
+      const dyFrac = (ev.clientY - startY) / rect.height;
+      latest = { x: clampOffset(start.x + dxFrac), y: clampOffset(start.y + dyFrac) };
+      setGridOverrides((prev) => ({
+        ...prev,
+        [fieldId]: { ...prev[fieldId], [criterion]: { ...prev[fieldId]?.[criterion], [option]: latest } },
+      }));
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      void persistGridCell(fieldId, criterion, option, latest);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
   return (
     <main className="flex-grow w-full max-w-5xl mx-auto px-margin py-lg flex flex-col gap-md">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-sm">
@@ -131,8 +199,9 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
             Fix field positions
           </h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1 max-w-xl">
-            Drag a box to move it, or drag its bottom-right corner to resize. Saved changes apply to this form for
-            everyone, not just you.
+            {selectedIsRatingGrid
+              ? 'Drag one of the small dots to move where that row/column mark actually lands. Each dot is one criterion × option cell.'
+              : 'Drag a box to move it, or drag its bottom-right corner to resize. Saved changes apply to this form for everyone, not just you.'}
           </p>
         </div>
         <Link href={`/forms/${submissionId}/editor`}>
@@ -212,6 +281,26 @@ export function FieldPositionEditor({ submissionId }: { submissionId: string }) 
                 </div>
               );
             })}
+
+            {selectedId &&
+              pageFields
+                .filter((f) => f.id === selectedId && f.type === 'rating_grid' && f.gridCriteria?.length && f.gridOptions?.length)
+                .flatMap((field) =>
+                  field.gridCriteria!.flatMap((criterion, ri) =>
+                    field.gridOptions!.map((option, oi) => {
+                      const cell = getCellCenter(field, criterion, option, ri, oi);
+                      return (
+                        <div
+                          key={`${field.id}::${criterion}::${option}`}
+                          onPointerDown={(e) => startGridCellDrag(field.id, criterion, option, cell, e)}
+                          title={`${criterion} — ${option}`}
+                          className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-full bg-tertiary border-2 border-surface-container-lowest shadow-sm cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
+                          style={{ left: `${cell.x * 100}%`, top: `${cell.y * 100}%` }}
+                        />
+                      );
+                    }),
+                  ),
+                )}
           </div>
         ) : (
           <p className="text-center text-on-surface-variant font-body-md text-body-md py-xl">

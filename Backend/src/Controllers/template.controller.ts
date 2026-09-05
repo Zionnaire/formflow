@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
-import { listTemplates, getTemplateById, getTemplatePagePreview, updateFieldCoordinates } from '../Services/template.service.js';
+import {
+  listTemplates,
+  getTemplateById,
+  getTemplatePagePreview,
+  updateFieldCoordinates,
+  updateGridCellOverride,
+} from '../Services/template.service.js';
 import { createApiSuccess } from '../Utils/response.js';
 import { asyncHandler } from '../Utils/asyncHandler.js';
 
@@ -32,6 +38,18 @@ export const updateFieldCoordinatesHandler = asyncHandler(async (req: Request, r
     req.params['fieldId'] as string,
     req.user!.sub,
     req.body.coordinates,
+  );
+  res.json(createApiSuccess({ template }));
+});
+
+export const updateGridCellOverrideHandler = asyncHandler(async (req: Request, res: Response) => {
+  const template = await updateGridCellOverride(
+    req.params['id'] as string,
+    req.params['fieldId'] as string,
+    req.user!.sub,
+    req.body.criterion,
+    req.body.option,
+    { x: req.body.x, y: req.body.y },
   );
   res.json(createApiSuccess({ template }));
 });

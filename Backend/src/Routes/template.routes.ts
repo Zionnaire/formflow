@@ -4,6 +4,7 @@ import {
   getTemplateHandler,
   getTemplatePagePreviewHandler,
   updateFieldCoordinatesHandler,
+  updateGridCellOverrideHandler,
 } from '../Controllers/template.controller.js';
 import { uploadFormHandler } from '../Controllers/upload.controller.js';
 import { extractFieldsHandler } from '../Controllers/aiPipeline.controller.js';
@@ -11,7 +12,11 @@ import { authenticate } from '../Middlewares/auth.js';
 import { validate } from '../Middlewares/validate.js';
 import { aiPipelineRateLimiter } from '../Middlewares/rateLimiter.js';
 import { uploadDocumentMiddleware } from '../Middlewares/upload.js';
-import { ExtractFieldsSchema, UpdateFieldCoordinatesSchema } from '../Validators/template.validators.js';
+import {
+  ExtractFieldsSchema,
+  UpdateFieldCoordinatesSchema,
+  UpdateGridCellOverrideSchema,
+} from '../Validators/template.validators.js';
 
 const router: IRouter = Router();
 
@@ -25,6 +30,12 @@ router.patch(
   authenticate,
   validate(UpdateFieldCoordinatesSchema),
   updateFieldCoordinatesHandler,
+);
+router.patch(
+  '/:id/fields/:fieldId/grid-cell',
+  authenticate,
+  validate(UpdateGridCellOverrideSchema),
+  updateGridCellOverrideHandler,
 );
 
 export { router as templateRouter };

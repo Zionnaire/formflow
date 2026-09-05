@@ -44,6 +44,9 @@ const FieldDefinitionSchema = new mongoose.Schema<FieldDefinition>(
     detectedRuleYPositions: { type: [Number] },
     gridCriteria: { type: [String] },
     gridOptions: { type: [String] },
+    // Keyed by arbitrary criterion/option strings from the source PDF, not a fixed shape —
+    // Mixed is the natural fit for a nested map like this in Mongoose.
+    gridCellOverrides: { type: mongoose.Schema.Types.Mixed },
     computeFrom: { type: [String] },
   },
   { _id: false },

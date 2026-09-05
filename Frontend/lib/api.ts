@@ -51,6 +51,8 @@ export interface FieldDefinition {
   ruledLineCount?: number;
   gridCriteria?: string[];
   gridOptions?: string[];
+  /** Human-corrected per-cell mark centers for a rating_grid field, keyed by criterion then option — same fraction-of-page space as `coordinates`. Set via api.updateGridCellOverride. */
+  gridCellOverrides?: Record<string, Record<string, { x: number; y: number }>>;
   computeFrom?: string[];
 }
 
@@ -229,6 +231,12 @@ export const api = {
     request<{ template: ApiFormTemplate }>(`/templates/${templateId}/fields/${fieldId}`, {
       method: 'PATCH',
       body: JSON.stringify({ coordinates }),
+    }),
+
+  updateGridCellOverride: (templateId: string, fieldId: string, criterion: string, option: string, coords: { x: number; y: number }) =>
+    request<{ template: ApiFormTemplate }>(`/templates/${templateId}/fields/${fieldId}/grid-cell`, {
+      method: 'PATCH',
+      body: JSON.stringify({ criterion, option, ...coords }),
     }),
 
   // ── Submissions ───────────────────────────────────────────────────────────

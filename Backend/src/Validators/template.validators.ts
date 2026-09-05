@@ -17,3 +17,10 @@ export const UpdateFieldCoordinatesSchema = z.object({
     height: z.coerce.number().min(0.002).max(1.4),
   }),
 });
+
+export const UpdateGridCellOverrideSchema = z.object({
+  criterion: z.string().min(1),
+  option: z.string().min(1),
+  x: fraction,
+  y: fraction,
+});

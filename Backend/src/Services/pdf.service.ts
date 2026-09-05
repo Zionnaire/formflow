@@ -143,6 +143,7 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
         sourceText,
         field.page,
         field.coordinates,
+        field.gridCellOverrides,
       );
     } else if (field.type === 'long_text_ruled') {
       drawWrappedText(
@@ -332,9 +333,12 @@ function resolveCriterionRowsY(
 
 /**
  * Renders a rating_grid by marking the selected cell in each row, rather than dumping the
- * field's raw JSON value as text. Column positions are a uniform-grid approximation — the box is
- * assumed to span a label column plus one column per option, evenly divided — verified against
- * the real reference form to already land correctly (unlike rows, see resolveCriterionRowsY).
+ * field's raw JSON value as text. A person can correct any individual cell's position via the
+ * field-position editor (gridCellOverrides, checked first below) — that takes precedence over
+ * this function's own computed position, which is otherwise a uniform-grid approximation for
+ * columns (the box is assumed to span a label column plus one column per option, evenly divided —
+ * verified against the real reference form to already land correctly) plus text-anchored rows
+ * (see resolveCriterionRowsY).
  */
 function drawRatingGrid(
   page: PDFPage,
@@ -349,6 +353,7 @@ function drawRatingGrid(
   sourceText: PositionedText[],
   pageNumber: number,
   fieldCoordinates: { x: number; y: number; height: number },
+  gridCellOverrides: Record<string, Record<string, { x: number; y: number }>> | undefined,
 ): void {
   if (criteria.length === 0 || options.length === 0) return;
   let selections: Record<string, unknown>;
@@ -358,7 +363,7 @@ function drawRatingGrid(
     return;
   }
 
-  const { height: pageHeight } = page.getSize();
+  const { width: pageWidth, height: pageHeight } = page.getSize();
   const colWidth = boxWidth / (options.length + 1); // +1 for the criteria-label column
   const markSize = Math.min(boxHeight / criteria.length, colWidth) * 0.5;
 
@@ -370,8 +375,9 @@ function drawRatingGrid(
     const col = options.findIndex((opt) => opt.toLowerCase() === selected.toLowerCase());
     if (col === -1) return;
 
-    const cellCenterX = boxX + (col + 1.5) * colWidth;
-    const cellCenterY = pageHeight - rowsYFraction[row]! * pageHeight;
+    const override = gridCellOverrides?.[criterion]?.[options[col]!];
+    const cellCenterX = override ? override.x * pageWidth : boxX + (col + 1.5) * colWidth;
+    const cellCenterY = override ? pageHeight - override.y * pageHeight : pageHeight - rowsYFraction[row]! * pageHeight;
     // drawText anchors at the text baseline, not its visual center — an "X" drawn at
     // cellCenterY would sit with its baseline there and its glyph extending upward, reading as
     // shifted a half-row too high. Offset by half the glyph's actual width/cap-height instead.

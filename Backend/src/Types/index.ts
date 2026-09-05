@@ -65,6 +65,15 @@ export interface FieldDefinition {
   detectedRuleYPositions?: number[];
   gridCriteria?: string[];
   gridOptions?: string[];
+  /**
+   * Human-corrected per-cell centers for a `rating_grid` field, keyed by exact criterion then
+   * exact option string. Each {x,y} is a fraction of the full page — same top-left-origin space
+   * as `coordinates` — set by a person clicking/dragging a cell marker in the field-position
+   * editor (Services/template.service.ts updateGridCellOverride), not computed. pdf.service.ts's
+   * drawRatingGrid checks here first for a given criterion+option pair before falling back to its
+   * own text-anchored row / uniform-division column computation.
+   */
+  gridCellOverrides?: Record<string, Record<string, { x: number; y: number }>>;
   computeFrom?: string[];
 }
 
