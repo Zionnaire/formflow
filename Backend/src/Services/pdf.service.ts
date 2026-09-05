@@ -8,6 +8,46 @@ export interface MissingField {
   sectionId: string;
 }
 
+/**
+ * pdf-lib's StandardFonts only render WinAnsi (Windows-1252) — plain ASCII plus a specific set
+ * of Latin-1/typographic characters. AI-drafted write-ups and copy-pasted text routinely contain
+ * Unicode punctuation outside that set (non-breaking hyphens, various dash widths, smart quotes),
+ * which otherwise throws and fails PDF generation outright (confirmed: a real submission's draft
+ * text used U+2011 NON-BREAKING HYPHEN). Normalize the common cases to their ASCII equivalents,
+ * then drop anything else pdf-lib still can't encode — covers WinAnsi's whole Latin-1 range, so
+ * only genuinely exotic symbols (rare typographic marks, non-Latin scripts) are affected, and a
+ * few missing symbols beat a 500 that blocks the student from generating their PDF at all.
+ *
+ * Every key/pattern below is written as a \u escape rather than a literal glyph — several of
+ * these (the non-breaking hyphen and space especially) are visually identical to ASCII look-alikes
+ * in an editor, which makes literal characters here a silent bug magnet.
+ */
+const WINANSI_PUNCTUATION_FALLBACKS: Record<string, string> = {
+  '\u2010': '-', // hyphen
+  '\u2011': '-', // non-breaking hyphen
+  '\u2012': '-', // figure dash
+  '\u2013': '-', // en dash
+  '\u2014': '-', // em dash
+  '\u2015': '-', // horizontal bar
+  '\u2018': "'", // left single quote
+  '\u2019': "'", // right single quote
+  '\u201A': "'", // single low-9 quote
+  '\u201C': '"', // left double quote
+  '\u201D': '"', // right double quote
+  '\u201E': '"', // double low-9 quote
+  '\u2022': '-', // bullet
+  '\u2026': '...', // ellipsis
+  '\u00A0': ' ', // non-breaking space
+};
+
+const WINANSI_FALLBACK_PATTERN = /[\u2010-\u2015\u2018\u2019\u201A\u201C\u201D\u201E\u2022\u2026\u00A0]/g;
+
+function sanitizeForPdf(text: string): string {
+  const normalized = text.replace(WINANSI_FALLBACK_PATTERN, (ch) => WINANSI_PUNCTUATION_FALLBACKS[ch] ?? ch);
+  // eslint-disable-next-line no-control-regex -- deliberately keeping only Latin-1, WinAnsi's encodable range
+  return normalized.replace(/[^\x00-\xff]/g, '');
+}
+
 /** Flattens every section's data into a single fieldId -> value map. */
 export function collectSubmissionData(submission: ISubmission): Record<string, string> {
   const data: Record<string, string> = {};
@@ -39,8 +79,9 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
   const pages = pdfDoc.getPages();
 
   for (const field of template.fieldSchema) {
-    const value = data[field.id];
-    if (!value || field.type === 'stamp' || field.type === 'computed') continue;
+    const rawValue = data[field.id];
+    if (!rawValue || field.type === 'stamp' || field.type === 'computed') continue;
+    const value = sanitizeForPdf(rawValue);
 
     const page = pages[field.page - 1];
     if (!page) continue;
