@@ -136,27 +136,31 @@ function detectRuledLinesForFields(fields: FieldDefinition[], rendered: Rendered
 }
 
 /**
- * Serves a template page's rasterized reference image — the visual backdrop for the
- * field-position editor. Templates created before this feature shipped have no pageImages yet;
- * backfilled lazily on first request rather than via a separate migration script, matching how
- * every other schema addition in this codebase has been handled (see e.g.
- * Services/submission.service.ts's generatedPdfPublicId fallback).
+ * Templates created before this feature shipped have no pageImages yet; backfilled lazily on
+ * first request rather than via a separate migration script, matching how every other schema
+ * addition in this codebase has been handled (see e.g. Services/submission.service.ts's
+ * generatedPdfPublicId fallback). Shared by every reader of a template's page images — the
+ * field-position editor's preview endpoint and a guest's share-link fill canvas alike — so a
+ * template backfills exactly once no matter which one happens to touch it first.
  */
+export async function ensurePageImages(template: IFormTemplate): Promise<PageImage[]> {
+  if (template.pageImages && template.pageImages.length > 0) return template.pageImages;
+
+  const bytes = await downloadAsset(template.sourceCloudinaryId, 'raw');
+  const rasterized = await rasterizeAndUploadPages(bytes, template.fileHash);
+  detectRuledLinesForFields(template.fieldSchema, rasterized.rendered);
+  template.renderDPI = RENDER_DPI;
+  template.pageImages = rasterized.pageImages;
+  template.markModified('fieldSchema');
+  await template.save();
+  logger.info({ templateId: template._id.toString(), pages: rasterized.pageImages.length }, 'Backfilled pageImages for a pre-existing template');
+  return rasterized.pageImages;
+}
+
+/** Serves a template page's rasterized reference image — the visual backdrop for the field-position editor and the fill canvas alike. */
 export async function getTemplatePagePreview(templateId: string, pageNumber: number): Promise<Buffer> {
   const template = await getTemplateById(templateId);
-
-  let pageImages = template.pageImages;
-  if (!pageImages || pageImages.length === 0) {
-    const bytes = await downloadAsset(template.sourceCloudinaryId, 'raw');
-    const rasterized = await rasterizeAndUploadPages(bytes, template.fileHash);
-    pageImages = rasterized.pageImages;
-    detectRuledLinesForFields(template.fieldSchema, rasterized.rendered);
-    template.renderDPI = RENDER_DPI;
-    template.pageImages = pageImages;
-    template.markModified('fieldSchema');
-    await template.save();
-    logger.info({ templateId, pages: pageImages.length }, 'Backfilled pageImages for a pre-existing template');
-  }
+  const pageImages = await ensurePageImages(template);
 
   const entry = pageImages.find((p) => p.page === pageNumber);
   if (!entry) throw new ApiError(404, `This document has no page ${pageNumber}`, 'NOT_FOUND');

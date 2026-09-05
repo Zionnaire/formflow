@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { LogoMark } from '@/components/ui/Logo';
-import { FieldRenderer } from '@/components/editor/FieldRenderer';
+import { PageOverlayFillEditor } from '@/components/editor/PageOverlayFillEditor';
 import { api, ApiRequestError, type PublicShareView } from '@/lib/api';
 
 const ROLE_LABEL: Record<PublicShareView['role'], string> = {
@@ -118,7 +118,7 @@ export function DynamicSharedFillForm({ token }: { token: string }) {
           </p>
         </main>
       ) : share ? (
-        <main className="w-full max-w-3xl bg-surface-container-lowest rounded-lg shadow-card p-margin md:p-lg">
+        <main className="w-full max-w-5xl bg-surface-container-lowest rounded-lg shadow-card p-margin md:p-lg">
           <form className="flex flex-col gap-lg" onSubmit={handleSubmit}>
             <div className="flex items-center gap-sm border-b border-surface-variant pb-base">
               <Icon name="assignment_ind" className="text-secondary" />
@@ -130,17 +130,13 @@ export function DynamicSharedFillForm({ token }: { token: string }) {
                 No fields were found for this section.
               </p>
             ) : (
-              <div className="flex flex-col gap-md">
-                {share.fields.map((field) => (
-                  <FieldRenderer
-                    key={field.id}
-                    field={field}
-                    value={values[field.id] ?? ''}
-                    onChange={(value) => setValues((prev) => ({ ...prev, [field.id]: value }))}
-                    suggestedSignature={suggestedSignature}
-                  />
-                ))}
-              </div>
+              <PageOverlayFillEditor
+                template={{ _id: share.templateId, title: share.templateTitle, pageImages: share.pageImages }}
+                fields={share.fields}
+                values={values}
+                onChange={(fieldId, value) => setValues((prev) => ({ ...prev, [fieldId]: value }))}
+                suggestedSignature={suggestedSignature}
+              />
             )}
 
             {error && (

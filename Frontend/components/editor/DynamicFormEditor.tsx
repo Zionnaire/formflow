@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { EditorSideNav } from '@/components/editor/EditorSideNav';
-import { FieldRenderer } from '@/components/editor/FieldRenderer';
+import { PageOverlayFillEditor } from '@/components/editor/PageOverlayFillEditor';
 import { ShareSectionsPanel } from '@/components/editor/ShareSectionsPanel';
 import { api, ApiRequestError, type ApiSubmission, type ApiFormTemplate } from '@/lib/api';
 
@@ -162,45 +162,44 @@ export function DynamicFormEditor({ submissionId }: { submissionId: string }) {
         autoFilling={autoFilling}
       />
 
-      <div className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-lg py-lg md:py-xl flex flex-col items-center">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-lg py-lg md:py-xl flex flex-col items-center">
         <div className="w-full text-center mb-lg">
           <h2 className="font-headline-lg text-headline-lg text-on-background mb-base">{template.title}</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
-            {template.pageCount} {template.pageCount === 1 ? 'page' : 'pages'} &bull; Please fill out all required fields.
+            {template.pageCount} {template.pageCount === 1 ? 'page' : 'pages'} &bull; Please fill out all required fields directly on the
+            page below.
           </p>
         </div>
 
-        <div className="w-full bg-surface-container-lowest rounded-lg shadow-card p-lg sm:p-xl relative overflow-hidden">
+        <div className="w-full relative">
           {autoFilling && (
-            <div className="absolute inset-0 bg-surface-container-lowest/70 backdrop-blur-sm z-20 flex items-center justify-center">
+            <div className="absolute inset-0 bg-surface-container-lowest/70 backdrop-blur-sm z-20 flex items-center justify-center rounded-lg">
               <Icon name="progress_activity" className="text-primary text-3xl animate-spin" />
             </div>
           )}
-          <form className="relative z-10 space-y-md w-full" onSubmit={(e) => e.preventDefault()}>
-            {fillableFields.length === 0 ? (
+          {fillableFields.length === 0 ? (
+            <div className="w-full bg-surface-container-lowest rounded-lg shadow-card p-lg sm:p-xl">
               <p className="text-on-surface-variant font-body-md text-body-md text-center py-lg">
                 No fields were detected for this form yet.
               </p>
-            ) : (
-              ownerFields.map((field) => (
-                <FieldRenderer
-                  key={field.id}
-                  field={field}
-                  value={values[field.id] ?? ''}
-                  onChange={(value) => updateField(field.id, value)}
-                  suggestedSignature={suggestedSignature}
-                  onSuggest={field.type === 'text' || field.type === 'long_text_ruled' ? handleSuggest : undefined}
-                  suggesting={suggestingFieldId === field.id}
-                />
-              ))
-            )}
+            </div>
+          ) : (
+            <PageOverlayFillEditor
+              template={template}
+              fields={ownerFields}
+              values={values}
+              onChange={updateField}
+              suggestedSignature={suggestedSignature}
+              onSuggest={handleSuggest}
+              suggestingFieldId={suggestingFieldId}
+            />
+          )}
 
-            {error && (
-              <p role="alert" className="font-label-sm text-label-sm text-error">
-                {error}
-              </p>
-            )}
-          </form>
+          {error && (
+            <p role="alert" className="font-label-sm text-label-sm text-error mt-sm">
+              {error}
+            </p>
+          )}
         </div>
 
         <ShareSectionsPanel submissionId={submission._id} sections={otherSections} />

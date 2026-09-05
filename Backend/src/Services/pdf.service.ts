@@ -130,9 +130,16 @@ export async function fillPdf(originalBytes: Buffer, template: IFormTemplate, su
     const fontSize = Math.min(targetSize, Math.max(8, boxHeight * 0.7 || targetSize));
 
     if (field.type === 'rating_grid') {
+      // rawValue, not the sanitized `value` — this is a JSON control blob keyed by the field's own
+      // criterion strings, never drawn as PDF text itself (only the literal ASCII "X" mark is
+      // drawn), so it must stay byte-for-byte identical to field.gridCriteria for the lookup
+      // below to match. Confirmed on the real reference form: sanitizeForPdf's curly-apostrophe
+      // normalization silently rewrote a criterion key containing "organization's" (typographic
+      // apostrophe) to a straight apostrophe, which no longer matched field.gridCriteria's own
+      // (untouched) string — the mark was silently dropped instead of drawn.
       drawRatingGrid(
         page,
-        value,
+        rawValue,
         field.gridCriteria ?? [],
         field.gridOptions ?? [],
         boxX,

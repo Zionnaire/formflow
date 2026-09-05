@@ -110,6 +110,9 @@ export interface PublicShareView {
   studentName: string;
   fields: FieldDefinition[];
   expiresAt: string;
+  templateId: string;
+  templateTitle: string;
+  pageImages: Array<{ page: number; cloudinaryPublicId: string; width: number; height: number }>;
 }
 
 export class ApiRequestError extends Error {

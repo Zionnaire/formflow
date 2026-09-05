@@ -7,7 +7,8 @@ import { ApiError } from '../Utils/errors.js';
 import { env } from '../config/env.js';
 import { logger } from '../Middlewares/logger.js';
 import { notifySectionCompleted } from './email.service.js';
-import type { PartyRole, FieldDefinition } from '../Types/index.js';
+import { ensurePageImages } from './template.service.js';
+import type { PartyRole, FieldDefinition, PageImage } from '../Types/index.js';
 
 export async function createShare(submissionId: string, ownerId: string, sectionId: string, role: PartyRole): Promise<IShare> {
   // Scoped by ownerId — without this, any authenticated user could mint a share link for
@@ -86,6 +87,15 @@ export interface PublicShareView {
   studentName: string;
   fields: FieldDefinition[];
   expiresAt: Date;
+  /**
+   * Just enough of the template for the guest's fill canvas (PageOverlayFillEditor) to render the
+   * real page image behind their section's fields — not sensitive: the same rasterized page image
+   * is already reachable by anyone with the template id via the unauthenticated
+   * GET /templates/:id/pages/:pageNumber/preview route, and carries no submission data.
+   */
+  templateId: string;
+  templateTitle: string;
+  pageImages: PageImage[];
 }
 
 /**
@@ -106,6 +116,7 @@ export async function getPublicShareView(token: string): Promise<PublicShareView
   if (!template) throw new ApiError(404, 'Form template not found', 'NOT_FOUND');
 
   const section = template.sections.find((s) => s.sectionId === share.sectionId);
+  const pageImages = await ensurePageImages(template);
 
   return {
     sectionId: share.sectionId,
@@ -114,6 +125,9 @@ export async function getPublicShareView(token: string): Promise<PublicShareView
     studentName: owner?.primaryProfile.fullName?.trim() || owner?.email || 'the student',
     fields: template.fieldSchema.filter((f) => f.sectionId === share.sectionId),
     expiresAt: share.expiresAt,
+    templateId: template._id.toString(),
+    templateTitle: template.title,
+    pageImages,
   };
 }
 

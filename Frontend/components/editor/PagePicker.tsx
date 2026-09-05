@@ -1,12 +1,24 @@
 'use client';
 
+interface PagePickerProps {
+  page: number;
+  onChange: (page: number) => void;
+  /** Full 1..pageCount range — the field-position editor's usual case. */
+  pageCount?: number;
+  /** An explicit, possibly non-contiguous subset of pages to offer instead (e.g. the fill canvas
+   * scoping a guest's share to only the pages their section's fields actually appear on). Takes
+   * precedence over pageCount when both are given. */
+  pages?: number[];
+}
+
 /** The numbered page-jump row shared by the field-position editor and the fill canvas. */
-export function PagePicker({ pageCount, page, onChange }: { pageCount: number; page: number; onChange: (page: number) => void }) {
-  if (pageCount <= 1) return null;
+export function PagePicker({ page, onChange, pageCount, pages }: PagePickerProps) {
+  const options = pages ?? Array.from({ length: pageCount ?? 0 }, (_, i) => i + 1);
+  if (options.length <= 1) return null;
 
   return (
     <div className="flex items-center gap-xs overflow-x-auto pb-1">
-      {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+      {options.map((n) => (
         <button
           key={n}
           type="button"
