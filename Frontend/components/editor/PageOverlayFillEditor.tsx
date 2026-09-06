@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { PageImageCanvas } from '@/components/editor/PageImageCanvas';
 import { PagePicker } from '@/components/editor/PagePicker';
@@ -219,14 +219,20 @@ function FieldOverlay({ field, value, onChange, suggestedSignature, onSuggest, s
 
   if (field.type === 'signature') {
     return (
-      <div className="absolute" style={boxStyle(field)}>
+      // items-start, not centered/stretched — matches pdf.service.ts's own convention for every
+      // non-ruled field (drawTextOpaque draws the baseline one fontSize below the box's *top*).
+      // Confirmed empirically against the real page image: the extracted box's top edge sits
+      // right on the printed line itself, with a lot of reserved blank space *below* it (room
+      // before the next field's own label) — so the line is at the top of the box, not centered
+      // in it or at its bottom.
+      <div className="absolute flex items-start" style={boxStyle(field)}>
         <FieldTag field={field} saving={saving} />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Type your full name to sign"
           autoComplete="off"
-          className="w-full h-full bg-transparent text-center focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-signature text-2xl text-primary placeholder:font-body-md placeholder:text-xs placeholder:text-outline"
+          className="w-full bg-transparent text-center focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-signature text-lg leading-none text-primary placeholder:font-body-md placeholder:text-xs placeholder:text-outline"
         />
         {suggestedSignature && suggestedSignature.trim() && value.trim() !== suggestedSignature.trim() && (
           <button
@@ -243,28 +249,96 @@ function FieldOverlay({ field, value, onChange, suggestedSignature, onSuggest, s
 
   if (field.type === 'long_text_ruled') {
     return (
-      <div className="absolute" style={boxStyle(field)}>
-        <FieldTag field={field} saving={saving} />
+      <RuledTextField field={field} value={value} onChange={onChange} saving={saving}>
         {canAskAi && <AskAiButton onClick={() => onSuggest!(field.id)} loading={Boolean(suggesting)} />}
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full h-full bg-transparent resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-body-md text-body-md text-on-surface p-1"
-        />
-      </div>
+      </RuledTextField>
     );
   }
 
-  // text | date
+  // text | date — same top-aligned convention as signature above.
   return (
-    <div className="absolute" style={boxStyle(field)}>
+    <div className="absolute flex items-start" style={boxStyle(field)}>
       <FieldTag field={field} saving={saving} />
       {canAskAi && <AskAiButton onClick={() => onSuggest!(field.id)} loading={Boolean(suggesting)} />}
       <input
         type={field.type === 'date' ? 'date' : 'text'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-full bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-body-md text-body-md text-on-surface px-1"
+        className="w-full bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-body-md text-sm leading-none text-on-surface px-1"
+      />
+    </div>
+  );
+}
+
+/**
+ * Aligns each wrapped line to the field's own real detected printed rules (Backend's
+ * Services/ruleDetection.service.ts, same data pdf.service.ts's drawWrappedTextOnDetectedRules
+ * already anchors to) instead of the browser's default line spacing — a plain textarea has no
+ * idea where this page's rules actually are, so its lines drift off them as text wraps. Falls
+ * back to ordinary line spacing when detection found nothing to anchor to (pdf.service.ts falls
+ * back to masking in that same case).
+ */
+function RuledTextField({
+  field,
+  value,
+  onChange,
+  saving,
+  children,
+}: {
+  field: FieldDefinition;
+  value: string;
+  onChange: (value: string) => void;
+  saving?: boolean;
+  children?: ReactNode;
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [boxHeightPx, setBoxHeightPx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height) setBoxHeightPx(height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const rules = field.detectedRuleYPositions;
+  let textareaStyle: CSSProperties = {};
+  if (rules && rules.length > 0 && boxHeightPx) {
+    const sorted = [...rules].sort((a, b) => a - b);
+    // Each rule is a fraction of the whole *page* height — re-express relative to this field's
+    // own box (already the coordinate space boxStyle positions it in) to get a pixel offset from
+    // the box's own top edge, using the box's current *rendered* height (responsive layout, not
+    // the page's raw pixel size).
+    const relPx = sorted.map((r) => ((r - field.coordinates.y) / field.coordinates.height) * boxHeightPx);
+    const firstLinePx = relPx[0]!;
+    const gapPx = relPx.length > 1 ? (relPx[relPx.length - 1]! - firstLinePx) / (relPx.length - 1) : firstLinePx;
+    const fontSizePx = Math.max(9, Math.min(15, gapPx * 0.55));
+    // A line box's baseline sits close to its own bottom edge (minus a small descent) for most
+    // fonts — so setting line-height to the real rule spacing and pushing the *bottom* of the
+    // first line box to the first detected rule (paddingTop = firstLinePx - lineHeight) lands
+    // each wrapped line close to its own real rule, the same anchor pdf.service.ts's
+    // drawWrappedTextOnDetectedRules uses server-side.
+    textareaStyle = {
+      fontSize: `${fontSizePx}px`,
+      lineHeight: `${gapPx}px`,
+      paddingTop: `${Math.max(0, firstLinePx - gapPx)}px`,
+      paddingBottom: 0,
+    };
+  }
+
+  return (
+    <div ref={wrapperRef} className="absolute" style={boxStyle(field)}>
+      <FieldTag field={field} saving={saving} />
+      {children}
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={textareaStyle}
+        className="w-full h-full bg-transparent resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-sm font-body-md text-on-surface px-1"
       />
     </div>
   );

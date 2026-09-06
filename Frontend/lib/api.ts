@@ -49,6 +49,8 @@ export interface FieldDefinition {
   required: boolean;
   helpText?: string;
   ruledLineCount?: number;
+  /** Real detected printed-rule y positions for a long_text_ruled field — same fraction-of-page space as `coordinates`, top-to-bottom order not guaranteed. See Backend's Services/ruleDetection.service.ts. */
+  detectedRuleYPositions?: number[];
   gridCriteria?: string[];
   gridOptions?: string[];
   /** Human-corrected per-cell mark centers for a rating_grid field, keyed by criterion then option — same fraction-of-page space as `coordinates`. Set via api.updateGridCellOverride. */
